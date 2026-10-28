@@ -1,1 +1,87 @@
 
+// One serverless function: /api/config, /api/quote, /api/submit, /api/status
+import bs58 from 'bs58';
+import { Connection, Keypair, PublicKey, VersionedTransaction } from '@solana/web3.js';
+import { getAssociatedTokenAddressSync, getMint } from '@solana/spl-token';
+import { buildPurchase, decodePurchase, tokensForLamports } from '../public/purchase.js';
+
+const env = process.env;
+const LAMPORTS_PER_SOL = 1_000_000_000;
+const toLamports = (s) => BigInt(Math.round(Number(s) * LAMPORTS_PER_SOL));
+
+const conn = new Connection(env.RPC_URL || 'https://api.mainnet-beta.solana.com', 'confirmed');
+const cluster = env.CLUSTER === 'devnet' ? 'devnet' : 'mainnet-beta';
+const chain = cluster === 'devnet' ? 'solana:devnet' : 'solana:mainnet';
+
+function loadSeller() {
+  const raw = (env.SELLER_SECRET_KEY || '').trim();
+  if (!raw) return null;
+  return Keypair.fromSecretKey(raw.startsWith('[') ? Uint8Array.from(JSON.parse(raw)) : bs58.decode(raw));
+}
+const seller = loadSeller();
+const receiver = env.RECEIVER_ADDRESS ? new PublicKey(env.RECEIVER_ADDRESS) : null;
+const mint = env.TOKEN_MINT ? new PublicKey(env.TOKEN_MINT) : null;
+const tokensPerSol = Number(env.TOKENS_PER_SOL || 0);
+const minLamports = toLamports(env.MIN_SOL || '0.01');
+const maxLamports = toLamports(env.MAX_SOL || '10');
+const enabled = Boolean(seller && receiver && mint && tokensPerSol > 0);
+
+const bad = (res, msg, code = 400) => res.status(code).json({ error: msg });
+
+export default async function handler(req, res) {
+  const action = req.query.action;
+  try {
+    if (action === 'config') {
+      if (!enabled) return res.json({ enabled: false });
+      const { decimals } = await getMint(conn, mint);
+      return res.json({
+        enabled: true, chain, cluster,
+        seller: seller.publicKey.toBase58(), receiver: receiver.toBase58(), mint: mint.toBase58(),
+        decimals, tokensPerSol,
+        minSol: Number(minLamports) / LAMPORTS_PER_SOL, maxSol: Number(maxLamports) / LAMPORTS_PER_SOL,
+      });
+    }
+
+    if (action === 'status') {
+      const sig = String(req.query.sig || '');
+      const { value } = await conn.getSignatureStatuses([sig]);
+      const st = value[0];
+      return res.json({ status: st?.err ? 'failed' : st?.confirmationStatus || 'unknown' });
+    }
+
+    if (req.method !== 'POST') return bad(res, 'POST required', 405);
+    if (!enabled) return bad(res, 'The sale is not open yet', 503);
+
+    if (action === 'quote') {
+      const buyer = new PublicKey(String(req.body.buyer));
+      const lamports = toLamports(req.body.sol);
+      if (lamports < minLamports || lamports > maxLamports) return bad(res, 'Amount outside the allowed range');
+      const { decimals } = await getMint(conn, mint);
+      const tokenRaw = tokensForLamports(lamports, tokensPerSol, decimals);
+      const [balance, stock] = await Promise.all([
+        conn.getBalance(buyer),
+        conn.getTokenAccountBalance(getAssociatedTokenAddressSync(mint, seller.publicKey)),
+      ]);
+      if (BigInt(balance) < lamports) return bad(res, 'Not enough SOL in your wallet');
+      if (BigInt(stock.value.amount) < tokenRaw) return bad(res, 'Not enough tokens left for that amount');
+      const { blockhash } = await conn.getLatestBlockhash('confirmed');
+      const tx = buildPurchase({ buyer, seller: seller.publicKey, receiver, mint, decimals, lamports, tokenRaw, blockhash });
+      tx.sign([seller]);
+      return res.json({ transaction: Buffer.from(tx.serialize()).toString('base64') });
+    }
+
+    if (action === 'submit') {
+      // No server memory needed: the seller's signature covers the exact message, so any change breaks it.
+      const tx = VersionedTransaction.deserialize(Buffer.from(String(req.body.transaction), 'base64'));
+      decodePurchase(tx, { seller: seller.publicKey, receiver, mint });
+      const sim = await conn.simulateTransaction(tx, { sigVerify: true, commitment: 'confirmed' });
+      if (sim.value.err) return bad(res, `Transaction would fail: ${JSON.stringify(sim.value.err)}`);
+      const signature = await conn.sendRawTransaction(tx.serialize(), { skipPreflight: true, maxRetries: 3 });
+      return res.json({ signature });
+    }
+
+    return bad(res, 'Not found', 404);
+  } catch (e) {
+    return bad(res, e.message || 'Server error');
+  }
+}
