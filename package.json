@@ -1,0 +1,13 @@
+{
+  "private": true,
+  "type": "module",
+  "engines": { "node": "26.x" },
+  "dependencies": {
+    "@solana/spl-token": "^0.4.9",
+    "@solana/web3.js": "^1.98.0",
+    "bs58": "^6.0.0"
+  },
+  "overrides": {
+    "rpc-websockets": "9.1.1"
+  }
+}
