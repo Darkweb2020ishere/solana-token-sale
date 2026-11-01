@@ -36,7 +36,8 @@ const toLamports = (s) => BigInt(Math.round(Number(s) * LAMPORTS_PER_SOL));
 const conn = new Connection(env.RPC_URL || 'https://api.mainnet-beta.solana.com', 'confirmed');
 const cluster = env.CLUSTER === 'devnet' ? 'devnet' : 'mainnet-beta';
 const chain = cluster === 'devnet' ? 'solana:devnet' : 'solana:mainnet';
-const publicRpc = env.PUBLIC_RPC_URL || 'https://api.mainnet-beta.solana.com';
+// Browsers are blocked (403) by api.mainnet-beta.solana.com, so the buyer's browser needs its own RPC list (comma-separated, no secret keys).
+const publicRpcs = (env.PUBLIC_RPC_URL || 'https://solana-rpc.publicnode.com,https://api.mainnet-beta.solana.com').split(',').map((u) => u.trim()).filter(Boolean);
 
 function loadSeller() {
   const raw = (env.SELLER_SECRET_KEY || '').trim();
@@ -116,7 +117,7 @@ export default async function handler(req, res) {
       if (!enabled) return res.json({ enabled: false });
       const { decimals } = await getMint(conn, mint);
       return res.json({
-        enabled: true, chain, cluster, publicRpc, swapEnabled,
+        enabled: true, chain, cluster, publicRpcs, swapEnabled,
         seller: seller.publicKey.toBase58(), receiver: receiver.toBase58(), mint: mint.toBase58(),
         decimals, tokensPerSol,
         minSol: Number(minLamports) / LAMPORTS_PER_SOL, maxSol: Number(maxLamports) / LAMPORTS_PER_SOL,
