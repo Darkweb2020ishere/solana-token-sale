@@ -155,18 +155,19 @@ export function decodeTokenPurchase(tx, { seller, receiver, mint, payMint }, tab
   const recvWsol = getAssociatedTokenAddressSync(WSOL, receiver);
   const srcAta = getAssociatedTokenAddressSync(payMint, buyer);
 
-  let limits = 0, prices = 0, ataBuyer = 0, ataRecv = 0, swapAt = -1, deliverAt = -1;
+  let limits = 0, prices = 0, ataBuyer = 0, ataRecv = 0, extraAtas = 0, swapAt = -1, deliverAt = -1;
   ixs.forEach((ix, i) => {
     if (ix.programId.equals(COMPUTE_BUDGET)) {
       if (ix.data[0] === 2) limits++;
       else if (ix.data[0] === 3) prices++;
       else fail('compute budget');
     } else if (ix.programId.equals(ASSOCIATED_TOKEN_PROGRAM_ID)) {
-      if (ix.data.length !== 1 || ix.data[0] !== 1) fail('account setup');
+      if (ix.data.length > 1 || (ix.data.length === 1 && ix.data[0] > 1)) fail('account setup');
       const [payer, ata, owner, m] = ix.keys.map((k) => k.pubkey);
       if (!payer.equals(seller)) fail('account setup payer');
       if (ata.equals(buyerAta) && owner.equals(buyer) && m.equals(mint)) ataBuyer++;
       else if (ata.equals(recvWsol) && owner.equals(receiver) && m.equals(WSOL)) ataRecv++;
+      else if (extraAtas < 3 && !owner.equals(seller) && ata.equals(getAssociatedTokenAddressSync(m, owner))) extraAtas++;
       else fail('account setup keys');
     } else if (ix.programId.equals(JUPITER_V6)) {
       if (swapAt >= 0) fail('multiple swaps');
