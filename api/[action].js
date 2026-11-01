@@ -10,6 +10,7 @@ import {
   VersionedTransaction,
 } from '@solana/web3.js';
 import {
+  ASSOCIATED_TOKEN_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
   createAssociatedTokenAccountIdempotentInstruction,
   createTransferCheckedInstruction,
@@ -221,9 +222,26 @@ export default async function handler(req, res) {
           dynamicComputeUnitLimit: false,
         }),
       });
-      // The buyer may have zero SOL, so any setup the buyer would have to pay for is not supported.
-      if (built.setupInstructions?.length || built.cleanupInstruction || built.tokenLedgerInstruction || built.otherInstructions?.length) {
-        return bad(res, 'That token needs a route this sale cannot sponsor yet. Try a smaller amount or another token.');
+      // The buyer may have zero SOL, so the SELLER pays for any account setup Jupiter asks for.
+      const ATA = ASSOCIATED_TOKEN_PROGRAM_ID.toBase58();
+      const buyerAtaKey = getAssociatedTokenAddressSync(mint, buyer).toBase58();
+      const unsupported = [];
+      if (built.cleanupInstruction) unsupported.push('cleanup');
+      if (built.tokenLedgerInstruction) unsupported.push('ledger');
+      if (built.otherInstructions?.length) unsupported.push('other');
+      const setup = [];
+      for (const i of built.setupInstructions || []) {
+        const ix = asIx(i);
+        const funder = ix.keys[0]?.pubkey;
+        if (i.programId !== ATA || !funder?.equals(buyer)) { unsupported.push(`setup:${i.programId.slice(0, 6)}`); continue; }
+        const target = ix.keys[1].pubkey.toBase58();
+        if (target === recvWsol.toBase58() || target === buyerAtaKey) continue; // we already create these ourselves
+        ix.keys[0] = { pubkey: seller.publicKey, isSigner: true, isWritable: true };
+        setup.push(ix);
+      }
+      if (unsupported.length) {
+        console.error('Unsupported Jupiter route', JSON.stringify({ payMint: payMint.toBase58(), unsupported }));
+        return bad(res, `That token needs a route this sale cannot sponsor yet (${unsupported.join(', ')}). Try a smaller amount or another token.`);
       }
 
       const tables = await loadLookupTables(conn, built.addressLookupTableAddresses || []);
@@ -232,6 +250,7 @@ export default async function handler(req, res) {
         ComputeBudgetProgram.setComputeUnitPrice({ microLamports: CU_PRICE }),
         createAssociatedTokenAccountIdempotentInstruction(seller.publicKey, recvWsol, receiver, WSOL),
         createAssociatedTokenAccountIdempotentInstruction(seller.publicKey, getAssociatedTokenAddressSync(mint, buyer), buyer, mint),
+        ...setup,
         asIx(built.swapInstruction),
         createTransferCheckedInstruction(
           getAssociatedTokenAddressSync(mint, seller.publicKey), mint, getAssociatedTokenAddressSync(mint, buyer),
