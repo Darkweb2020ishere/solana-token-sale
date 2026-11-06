@@ -23,15 +23,13 @@
   dl { display:grid; grid-template-columns:auto 1fr; gap:6px 14px; background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; }
   dt { color:var(--muted); } dd { margin:0; }
   #status { margin-top:14px; min-height:1.5em; word-break:break-word; } #status.err { color:#ff6b6b; }
-  a.openlink { display:block; text-align:center; background:var(--accent); color:#fff; text-decoration:none; border-radius:12px; padding:15px; font-weight:600; }
   [hidden] { display:none !important; }
 </style>
 <script type="importmap">
 { "imports": {
   "@solana/web3.js": "https://esm.sh/@solana/web3.js@1.98",
   "@solana/spl-token": "https://esm.sh/@solana/spl-token@0.4?deps=@solana/web3.js@1.98",
-  "@wallet-standard/app": "https://esm.sh/@wallet-standard/app@1",
-  "@walletconnect/sign-client": "https://esm.sh/@walletconnect/sign-client@2.17.3"
+  "@wallet-standard/app": "https://esm.sh/@wallet-standard/app@1"
 } }
 </script>
 </head>
@@ -68,7 +66,6 @@
     </div>
     <p id="status" role="status"></p>
   </section>
-  <p id="open-link" hidden><a id="open-link-a" class="openlink" href="#">Open Jupiter</a></p>
 </main>
 
 <script type="module">
@@ -103,7 +100,11 @@ const WALLETS = [
     link: (u) => `https://link.trustwallet.com/open_url?coin_id=501&url=${enc(u)}` },
   { label: 'Coinbase Wallet', match: /coinbase/i, legacy: () => window.coinbaseSolana,
     link: (u) => `https://go.cb-w.com/dapp?cb_url=${enc(u)}` },
-  { label: 'Jupiter', match: /jupiter/i,    legacy: () => null, link: null, wc: true },
+  { label: 'OKX Wallet', match: /okx/i, legacy: () => window.okxwallet?.solana,
+    link: (u) => `https://web3.okx.com/download?deeplink=${enc('okx://wallet/dapp/url?dappUrl=' + enc(u))}` },
+  { label: 'Bitget Wallet', match: /bitget|bitkeep/i, legacy: () => window.bitkeep?.solana || window.bitget?.solana,
+    link: (u) => `https://bkcode.vip?action=dapp&url=${u}` },
+  { label: 'Jupiter', match: /jupiter/i,    legacy: () => null, link: null },
 ];
 
 function standardAdapter(w) {
@@ -152,30 +153,14 @@ function renderWallets() {
     b.className = 'wallet';
     b.textContent = def.label;
     const small = document.createElement('small');
-    small.textContent = found ? 'Tap to connect' : def.wc && config.wcProjectId ? 'Tap to open Jupiter' : def.link ? 'Tap to open in app' : 'Copy link, open in app';
+    small.textContent = found ? 'Tap to connect' : def.link ? 'Tap to open in app' : 'Copy link, open in app';
     b.append(small);
-    b.onclick = () => (found ? connect(found) : def.wc && config.wcProjectId ? connectJupiter() : openInApp(def));
+    b.onclick = () => (found ? connect(found) : openInApp(def));
     list.append(b);
   }
   $('hint').textContent = anyDetected
     ? ''
     : 'Tap your wallet. This page will reopen inside the wallet app, then connect there.';
-}
-
-const linkUi = {
-  showLink(href, text) { $('open-link-a').href = href; $('open-link-a').textContent = text; $('open-link').hidden = false; },
-  hideLink() { $('open-link').hidden = true; },
-};
-
-async function connectJupiter() {
-  try {
-    setStatus('Opening Jupiter…');
-    const { createJupiterAdapter } = await import('./jupiter.js');
-    await connect(createJupiterAdapter(config, linkUi));
-  } catch (e) {
-    linkUi.hideLink();
-    setStatus(e.message || 'Could not reach Jupiter', true);
-  }
 }
 
 async function openInApp(def) {
@@ -195,7 +180,7 @@ async function connect(a) {
     $('buy').hidden = false;
     setStatus('');
     loadTokens(address);
-  } catch (e) { linkUi.hideLink(); setStatus(e.message || 'Connection cancelled', true); }
+  } catch (e) { setStatus(e.message || 'Connection cancelled', true); }
 }
 
 async function loadTokens(address) {
@@ -305,7 +290,6 @@ async function init() {
     : 'The sale is not open yet. You can still test connecting a wallet.';
   $('quote').disabled = !config.enabled;
   renderWallets();
-  if (config.wcProjectId) import('./jupiter.js').then((m) => m.prepare(config)).catch(() => {});
   const { on } = getWallets();
   on('register', renderWallets);
 }
