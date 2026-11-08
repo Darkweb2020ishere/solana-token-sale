@@ -15,6 +15,7 @@ import {
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
   NATIVE_MINT,
+  TOKEN_2022_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
   createAssociatedTokenAccountIdempotentInstruction,
   createTransferCheckedInstruction,
@@ -124,6 +125,9 @@ export const JUPITER_V6 = new PublicKey('JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyV
 export const COMPUTE_BUDGET = new PublicKey('ComputeBudget111111111111111111111111111111');
 export const WSOL = NATIVE_MINT;
 
+// The two token programs a buyer's payment token can belong to. The SALE token itself must stay a classic token.
+export const isPayTokenProgram = (p) => p.equals(TOKEN_PROGRAM_ID) || p.equals(TOKEN_2022_PROGRAM_ID);
+
 export const isTokenPurchase = (tx) => tx.message.staticAccountKeys.some((k) => k.equals(JUPITER_V6));
 export const tableKeys = (tx) => tx.message.addressTableLookups.map((l) => l.accountKey);
 
@@ -141,7 +145,9 @@ export async function loadLookupTables(conn, keys) {
 
 // Strictly decodes a token purchase. `tables` are the lookup tables the message uses (fetch with loadLookupTables).
 // Throws unless the transaction is exactly the shape above and the swap cannot touch the seller's assets.
-export function decodeTokenPurchase(tx, { seller, receiver, mint, payMint }, tables) {
+// `payProgram` is the token program that owns the buyer's payment token (classic or Token-2022).
+export function decodeTokenPurchase(tx, { seller, receiver, mint, payMint, payProgram = TOKEN_PROGRAM_ID }, tables) {
+  if (!isPayTokenProgram(payProgram)) fail('payment token program');
   const msg = tx.message;
   if (msg.header.numRequiredSignatures !== 2) fail('signer count');
   const keys = msg.staticAccountKeys;
@@ -153,7 +159,7 @@ export function decodeTokenPurchase(tx, { seller, receiver, mint, payMint }, tab
   const buyerAta = getAssociatedTokenAddressSync(mint, buyer);
   const sellerAta = getAssociatedTokenAddressSync(mint, seller);
   const recvWsol = getAssociatedTokenAddressSync(WSOL, receiver);
-  const srcAta = getAssociatedTokenAddressSync(payMint, buyer);
+  const srcAta = getAssociatedTokenAddressSync(payMint, buyer, false, payProgram);
 
   let limits = 0, prices = 0, ataBuyer = 0, ataRecv = 0, extraAtas = 0, swapAt = -1, deliverAt = -1;
   ixs.forEach((ix, i) => {
@@ -163,11 +169,14 @@ export function decodeTokenPurchase(tx, { seller, receiver, mint, payMint }, tab
       else fail('compute budget');
     } else if (ix.programId.equals(ASSOCIATED_TOKEN_PROGRAM_ID)) {
       if (ix.data.length > 1 || (ix.data.length === 1 && ix.data[0] > 1)) fail('account setup');
-      const [payer, ata, owner, m] = ix.keys.map((k) => k.pubkey);
+      const [payer, ata, owner, m, , ataTokenProgram] = ix.keys.map((k) => k.pubkey);
       if (!payer.equals(seller)) fail('account setup payer');
       if (ata.equals(buyerAta) && owner.equals(buyer) && m.equals(mint)) ataBuyer++;
       else if (ata.equals(recvWsol) && owner.equals(receiver) && m.equals(WSOL)) ataRecv++;
-      else if (extraAtas < 3 && !owner.equals(seller) && ata.equals(getAssociatedTokenAddressSync(m, owner))) extraAtas++;
+      else if (
+        extraAtas < 3 && !owner.equals(seller) && ataTokenProgram && isPayTokenProgram(ataTokenProgram) &&
+        ata.equals(getAssociatedTokenAddressSync(m, owner, false, ataTokenProgram))
+      ) extraAtas++;
       else fail('account setup keys');
     } else if (ix.programId.equals(JUPITER_V6)) {
       if (swapAt >= 0) fail('multiple swaps');
