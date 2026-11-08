@@ -104,15 +104,6 @@ const WALLETS = [
     link: (u) => `https://web3.okx.com/download?deeplink=${enc('okx://wallet/dapp/url?dappUrl=' + enc(u))}` },
   { label: 'Bitget Wallet', match: /bitget|bitkeep/i, legacy: () => window.bitkeep?.solana || window.bitget?.solana,
     link: (u) => `https://bkcode.vip?action=dapp&url=${u}` },
-  // Popular with Solana traders and holders. Only Nightly has a documented "open this page in the app" link;
-  // for the others the button copies the page link and tells the user to open it in the wallet's own browser.
-  { label: 'Nightly', match: /nightly/i, legacy: () => window.nightly?.solana,
-    link: (u) => `https://nightly.app/v1?network=solana&cluster=${config.cluster === 'devnet' ? 'devnet' : 'mainnet'}&url=${enc(u)}` },
-  { label: 'Magic Eden', match: /magic\s?eden/i, legacy: () => window.magicEden?.solana, link: null },
-  { label: 'Binance Wallet', match: /binance/i, legacy: () => null, link: null },
-  { label: 'Bybit Wallet', match: /bybit/i, legacy: () => null, link: null },
-  { label: 'Exodus', match: /exodus/i, legacy: () => window.exodus?.solana, link: null },
-  { label: 'Coin98', match: /coin98/i, legacy: () => window.coin98?.sol, link: null },
   { label: 'Jupiter', match: /jupiter/i,    legacy: () => null, link: null },
 ];
 
