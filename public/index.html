@@ -235,12 +235,18 @@ $('quote').onclick = async () => {
     } else {
       setStatus('Verifying the transaction…');
       // Read the lookup tables ourselves (not from our server) so the check stays independent.
-      let tables = null;
+      // The same goes for which token program (classic or Token-2022) owns the payment token.
+      let tables = null, payProgram = null;
       for (const url of config.publicRpcs) {
-        try { tables = await loadLookupTables(new Connection(url, 'confirmed'), tableKeys(tx)); break; } catch { /* try the next RPC */ }
+        try {
+          const rpc = new Connection(url, 'confirmed');
+          const [t, mintInfo] = await Promise.all([loadLookupTables(rpc, tableKeys(tx)), rpc.getAccountInfo(pk(payMint))]);
+          if (!mintInfo) throw new Error('Token not found');
+          tables = t; payProgram = mintInfo.owner; break;
+        } catch { /* try the next RPC */ }
       }
       if (!tables) throw new Error('Could not verify the transaction in your browser. Please try again in a moment.');
-      const d = decodeTokenPurchase(tx, { ...ctx, payMint: pk(payMint) }, tables);
+      const d = decodeTokenPurchase(tx, { ...ctx, payMint: pk(payMint), payProgram }, tables);
       if (d.buyer !== address || d.decimals !== config.decimals) throw new Error('Transaction does not match your wallet');
       $('s-pay').textContent = `${formatUnits(d.amountIn, token.decimals)} ${token.symbol}`;
       $('s-get').textContent = `${formatUnits(d.tokenRaw, d.decimals)} tokens`;

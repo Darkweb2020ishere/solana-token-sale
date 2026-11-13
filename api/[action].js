@@ -11,10 +11,13 @@ import {
 } from '@solana/web3.js';
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
+  ExtensionType,
+  TOKEN_2022_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
   createAssociatedTokenAccountIdempotentInstruction,
   createTransferCheckedInstruction,
   getAssociatedTokenAddressSync,
+  getExtensionTypes,
   getMint,
 } from '@solana/spl-token';
 import {
@@ -61,6 +64,19 @@ const CU_LIMIT = Number(env.CU_LIMIT || 600_000);
 const CU_PRICE = Number(env.CU_PRICE_MICROLAMPORTS || 50_000);
 
 const bad = (res, msg, code = 400) => res.status(code).json({ error: msg });
+
+// Token-2022 extensions we refuse as a PAYMENT token, because they can change or block a transfer in ways the
+// sale cannot predict. (Names are looked up safely so an older spl-token version simply skips ones it lacks.)
+const BLOCKED_EXTENSIONS = ['TransferHook', 'NonTransferable', 'PausableConfig']
+  .map((name) => ExtensionType[name])
+  .filter((v) => v !== undefined);
+
+// Which token program owns this mint: classic or Token-2022. Anything else is not a token we accept.
+async function tokenProgramOf(mintKey) {
+  const info = await conn.getAccountInfo(mintKey);
+  if (info && (info.owner.equals(TOKEN_PROGRAM_ID) || info.owner.equals(TOKEN_2022_PROGRAM_ID))) return info.owner;
+  throw new Error('That token is not supported');
+}
 
 async function jup(path, init = {}) {
   const r = await fetch(JUP + path, { ...init, headers: jupHeaders });
@@ -134,13 +150,15 @@ export default async function handler(req, res) {
     if (action === 'tokens') {
       if (!swapEnabled) return res.json({ tokens: [] });
       const owner = new PublicKey(String(req.query.owner));
-      const { value } = await conn.getParsedTokenAccountsByOwner(owner, { programId: TOKEN_PROGRAM_ID });
-      let held = value
-        .map((a) => ({ addr: a.pubkey.toBase58(), info: a.account.data.parsed.info }))
-        .filter(({ addr, info }) =>
+      const programs = [TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID];
+      const lists = await Promise.all(programs.map(async (programId) => {
+        const { value } = await conn.getParsedTokenAccountsByOwner(owner, { programId });
+        return value.map((a) => ({ addr: a.pubkey.toBase58(), info: a.account.data.parsed.info, programId }));
+      }));
+      let held = lists.flat().filter(({ addr, info, programId }) =>
           BigInt(info.tokenAmount.amount) > 0n &&
           info.mint !== mint.toBase58() &&
-          addr === getAssociatedTokenAddressSync(new PublicKey(info.mint), owner).toBase58());
+          addr === getAssociatedTokenAddressSync(new PublicKey(info.mint), owner, false, programId).toBase58());
       held = held.slice(0, 100);
       let meta = new Map();
       let known = false;
@@ -191,11 +209,17 @@ export default async function handler(req, res) {
       if (!swapEnabled) return bad(res, 'Paying with other tokens is not available yet');
       const payMint = new PublicKey(String(req.body.payMint));
       if (payMint.equals(mint) || payMint.equals(WSOL)) return bad(res, 'Choose a different token');
-      const payDecimals = (await getMint(conn, payMint)).decimals; // throws for non-classic tokens
+      const payProgram = await tokenProgramOf(payMint);
+      const payMintInfo = await getMint(conn, payMint, 'confirmed', payProgram);
+      if (payProgram.equals(TOKEN_2022_PROGRAM_ID)) {
+        const blocked = getExtensionTypes(payMintInfo.tlvData).filter((t) => BLOCKED_EXTENSIONS.includes(t));
+        if (blocked.length) return bad(res, 'This token has special rules (transfer hook, pausable or non-transferable) that this sale cannot accept. Please pay with another token.');
+      }
+      const payDecimals = payMintInfo.decimals;
       const amountIn = parseUnits(req.body.amount, payDecimals);
       if (amountIn <= 0n) return bad(res, 'Enter an amount');
 
-      const srcAta = getAssociatedTokenAddressSync(payMint, buyer);
+      const srcAta = getAssociatedTokenAddressSync(payMint, buyer, false, payProgram);
       const [src, stock] = await Promise.all([
         conn.getTokenAccountBalance(srcAta).catch(() => null),
         conn.getTokenAccountBalance(getAssociatedTokenAddressSync(mint, seller.publicKey)),
@@ -265,7 +289,7 @@ export default async function handler(req, res) {
       try { bytes = tx.serialize(); } catch { return bad(res, 'That swap route is too large. Try a smaller amount or another token.'); }
 
       // Self-check the transaction, then check the real balance changes by simulation.
-      const d = decodeTokenPurchase(tx, { seller: seller.publicKey, receiver, mint, payMint }, tables);
+      const d = decodeTokenPurchase(tx, { seller: seller.publicKey, receiver, mint, payMint, payProgram }, tables);
       if (d.amountIn !== amountIn) return bad(res, 'Quote mismatch. Please try again.');
       await verifyEffects(tx, d, { sigVerify: false, replaceRecentBlockhash: true });
 
@@ -281,7 +305,9 @@ export default async function handler(req, res) {
       if (isTokenPurchase(tx)) {
         if (!swapEnabled) return bad(res, 'Paying with other tokens is not available yet');
         const tables = await loadLookupTables(conn, tableKeys(tx));
-        const d = decodeTokenPurchase(tx, { seller: seller.publicKey, receiver, mint, payMint: new PublicKey(String(req.body.payMint)) }, tables);
+        const payMint = new PublicKey(String(req.body.payMint));
+        const payProgram = await tokenProgramOf(payMint);
+        const d = decodeTokenPurchase(tx, { seller: seller.publicKey, receiver, mint, payMint, payProgram }, tables);
         await verifyEffects(tx, d, { sigVerify: true });
       } else {
         decodePurchase(tx, { seller: seller.publicKey, receiver, mint });
