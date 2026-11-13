@@ -65,6 +65,28 @@ const CU_PRICE = Number(env.CU_PRICE_MICROLAMPORTS || 50_000);
 
 const bad = (res, msg, code = 400) => res.status(code).json({ error: msg });
 
+// ---- USD prices (Jupiter Price API v3). Tokens without a reliable price are simply missing from its answer. ----
+const priceCache = new Map(); // mint -> { usd, at }
+async function usdPrice(mintKey) {
+  const k = mintKey.toBase58();
+  const hit = priceCache.get(k);
+  if (hit && Date.now() - hit.at < 20_000) return hit.usd;
+  const j = await jup(`/price/v3?ids=${k}`);
+  const usd = Number(j?.[k]?.usdPrice);
+  if (!Number.isFinite(usd) || usd <= 0) throw new Error('This token has no reliable USD price right now. Enter an amount of the token instead.');
+  priceCache.set(k, { usd, at: Date.now() });
+  return usd;
+}
+
+// Dollars (text like "12.5") -> raw token units at a USD price. Exact integer math; the price is scaled to 1e-12 USD.
+function usdToRaw(usdText, price, decimals) {
+  const micro = parseUnits(usdText, 6);
+  const scaled = BigInt(Math.round(price * 1e12));
+  if (scaled <= 0n) throw new Error('Price is too small to convert. Enter an amount of the token instead.');
+  return (micro * 10n ** BigInt(decimals) * 1_000_000n) / scaled;
+}
+const dollars = (lamports, solUsd) => (Number(lamports) / LAMPORTS_PER_SOL) * solUsd;
+
 // Token-2022 extensions we refuse as a PAYMENT token. Only non-transferable tokens, which can never be swapped.
 // Everything else (pause switch, transfer hook, transfer fee...) is left to the trial run of the transaction, which
 // fails with a clear message if the token's rules get in the way.
@@ -150,6 +172,8 @@ export default async function handler(req, res) {
     if (action === 'tokens') {
       if (!swapEnabled) return res.json({ tokens: [] });
       const owner = new PublicKey(String(req.query.owner));
+      // The wallet's SOL, with its USD price, so SOL can be ranked next to the tokens.
+      const [solLamports, solUsd] = await Promise.all([conn.getBalance(owner), usdPrice(WSOL).catch(() => null)]);
       const programs = [TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID];
       const lists = await Promise.all(programs.map(async (programId) => {
         const { value } = await conn.getParsedTokenAccountsByOwner(owner, { programId });
@@ -177,8 +201,10 @@ export default async function handler(req, res) {
           name: meta.get(h.info.mint)?.name || '',
           decimals: h.info.tokenAmount.decimals,
           amount: h.info.tokenAmount.amount,
+          usdPrice: meta.get(h.info.mint)?.usdPrice ?? null,
+          liquidity: meta.get(h.info.mint)?.liquidity ?? null,
         }));
-      return res.json({ tokens });
+      return res.json({ tokens, sol: { lamports: String(solLamports), usdPrice: solUsd }, usd: true });
     }
 
     if (req.method !== 'POST') return bad(res, 'POST required', 405);
@@ -191,8 +217,17 @@ export default async function handler(req, res) {
 
       // ---- Pay with SOL ----
       if (!req.body.payMint) {
-        const lamports = toLamports(req.body.sol);
-        if (lamports < minLamports || lamports > maxLamports) return bad(res, 'Amount outside the allowed range');
+        let lamports, solUsd = null;
+        if (req.body.usd !== undefined) {
+          solUsd = await usdPrice(WSOL);
+          lamports = usdToRaw(req.body.usd, solUsd, 9);
+        } else {
+          lamports = toLamports(req.body.sol);
+        }
+        if (lamports < minLamports || lamports > maxLamports) {
+          const range = solUsd ? ` (about $${dollars(minLamports, solUsd).toFixed(2)} to $${dollars(maxLamports, solUsd).toFixed(2)})` : '';
+          return bad(res, `Amount outside the allowed range${range}`);
+        }
         const tokenRaw = tokensForLamports(lamports, tokensPerSol, decimals);
         const [balance, stock] = await Promise.all([
           conn.getBalance(buyer),
@@ -220,7 +255,9 @@ export default async function handler(req, res) {
         }
       }
       const payDecimals = payMintInfo.decimals;
-      const amountIn = parseUnits(req.body.amount, payDecimals);
+      const amountIn = req.body.usd !== undefined
+        ? usdToRaw(req.body.usd, await usdPrice(payMint), payDecimals)
+        : parseUnits(req.body.amount, payDecimals);
       if (amountIn <= 0n) return bad(res, 'Enter an amount');
 
       const srcAta = getAssociatedTokenAddressSync(payMint, buyer, false, payProgram);
