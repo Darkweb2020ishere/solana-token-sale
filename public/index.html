@@ -81,6 +81,7 @@ let adapter = null;
 let pendingTx = null;
 let pendingPayMint = '';
 let heldTokens = [];
+let solEntry = null; // the wallet's SOL, shaped like a token, when USD values are available
 
 const b64ToBytes = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
 const bytesToB64 = (bytes) => { let s = ''; for (const b of bytes) s += String.fromCharCode(b); return btoa(s); };
@@ -183,23 +184,48 @@ async function connect(a) {
   } catch (e) { setStatus(e.message || 'Connection cancelled', true); }
 }
 
+const usd = (v) => (v > 0 && v < 0.01 ? '<$0.01' : v.toLocaleString(undefined, { style: 'currency', currency: 'USD' }));
+const shortBal = (raw, decimals) => {
+  const [w, f = ''] = formatUnits(BigInt(raw), decimals).split('.');
+  return f ? `${w}.${f.slice(0, 4)}`.replace(/\.$/, '') : w;
+};
+// The wallet's holdings (SOL + tokens), most valuable first. Holdings without a price go last.
+const holdings = () => [...(solEntry ? [solEntry] : []), ...heldTokens];
+const current = () => holdings().find((x) => x.mint === $('pay').value) || null;
+const priced = (t) => Boolean(t && t.usdPrice > 0);
+const valueOf = (t) => (priced(t) ? (Number(t.amount) / 10 ** t.decimals) * t.usdPrice : -1);
+
 async function loadTokens(address) {
   const sel = $('pay');
   sel.replaceChildren(new Option('SOL', ''));
-  heldTokens = [];
+  heldTokens = []; solEntry = null;
   updateLabel();
   if (!config.swapEnabled) return;
   try {
-    const { tokens } = await (await fetch(`/api/tokens?owner=${enc(address)}`)).json();
-    heldTokens = tokens || [];
-    for (const t of heldTokens) sel.append(new Option(`${t.symbol} (balance ${formatUnits(BigInt(t.amount), t.decimals)})`, t.mint));
-  } catch { /* SOL only */ }
+    const data = await (await fetch(`/api/tokens?owner=${enc(address)}`)).json();
+    heldTokens = (data.tokens || []).map((t) => ({ ...t, usdValue: valueOf(t) }));
+    if (data.usd && data.sol) solEntry = { mint: '', symbol: 'SOL', decimals: 9, amount: data.sol.lamports, usdPrice: data.sol.usdPrice };
+    const list = holdings().map((t) => ({ ...t, usdValue: valueOf(t) })).sort((a, b) => b.usdValue - a.usdValue);
+    sel.replaceChildren();
+    for (const t of list) {
+      const worth = priced(t) ? usd(t.usdValue) : 'no price';
+      const thin = priced(t) && t.liquidity != null && t.liquidity < 10000 ? ' · low liquidity' : '';
+      sel.append(new Option(`${t.symbol} · ${worth}${thin} · ${shortBal(t.amount, t.decimals)} held`, t.mint));
+    }
+    if (!list.length) sel.append(new Option('SOL', ''));
+    if (solEntry?.usdPrice) {
+      const p = solEntry.usdPrice;
+      $('banner').textContent += ` (about ${usd(config.minSol * p)} to ${usd(config.maxSol * p)})`;
+    }
+    updateLabel();
+  } catch { sel.replaceChildren(new Option('SOL', '')); updateLabel(); /* SOL only */ }
 }
 
 function updateLabel() {
-  const t = heldTokens.find((x) => x.mint === $('pay').value);
-  $('amount-label').textContent = t ? `${t.symbol} to spend` : 'SOL to spend';
-  $('sol').placeholder = t ? '1000' : '0.5';
+  const t = current();
+  const inUsd = priced(t);
+  $('amount-label').textContent = inUsd ? 'USD to spend' : `${t ? t.symbol : 'SOL'} to spend`;
+  $('sol').placeholder = inUsd ? '10' : (t ? '1000' : '0.5');
   $('summary').hidden = true; pendingTx = null;
 }
 $('pay').onchange = updateLabel;
@@ -217,8 +243,11 @@ $('quote').onclick = async () => {
     setStatus('Preparing your purchase…');
     const address = $('who').dataset.address;
     const payMint = $('pay').value;
-    const token = heldTokens.find((x) => x.mint === payMint);
-    const body = payMint ? { buyer: address, payMint, amount: $('sol').value } : { buyer: address, sol: $('sol').value };
+    const token = holdings().find((x) => x.mint === payMint);
+    const inUsd = priced(token);
+    const amountField = inUsd ? { usd: $('sol').value } : (payMint ? { amount: $('sol').value } : { sol: $('sol').value });
+    const body = payMint ? { buyer: address, payMint, ...amountField } : { buyer: address, ...amountField };
+    const worth = (units, decimals) => (inUsd ? ` (about ${usd((Number(units) / 10 ** decimals) * token.usdPrice)})` : '');
     const res = await fetch('/api/quote', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Could not get a quote');
@@ -229,7 +258,7 @@ $('quote').onclick = async () => {
     if (!payMint) {
       const d = decodePurchase(tx, ctx);
       if (d.buyer !== address || d.decimals !== config.decimals) throw new Error('Transaction does not match your wallet');
-      $('s-pay').textContent = `${formatUnits(d.lamports, 9)} SOL`;
+      $('s-pay').textContent = `${formatUnits(d.lamports, 9)} SOL${worth(d.lamports, 9)}`;
       $('s-get').textContent = `${formatUnits(d.tokenRaw, d.decimals)} tokens`;
       $('s-note').textContent = 'Both transfers happen in one transaction. If either fails, nothing moves.';
     } else {
@@ -248,7 +277,7 @@ $('quote').onclick = async () => {
       if (!tables) throw new Error('Could not verify the transaction in your browser. Please try again in a moment.');
       const d = decodeTokenPurchase(tx, { ...ctx, payMint: pk(payMint), payProgram }, tables);
       if (d.buyer !== address || d.decimals !== config.decimals) throw new Error('Transaction does not match your wallet');
-      $('s-pay').textContent = `${formatUnits(d.amountIn, token.decimals)} ${token.symbol}`;
+      $('s-pay').textContent = `${formatUnits(d.amountIn, token.decimals)} ${token.symbol}${worth(d.amountIn, token.decimals)}`;
       $('s-get').textContent = `${formatUnits(d.tokenRaw, d.decimals)} tokens`;
       $('s-note').textContent = `Your ${token.symbol} is swapped to SOL (at least ${formatUnits(BigInt(data.minOutLamports), 9)} SOL guaranteed) and the tokens are delivered in the same transaction. If anything fails, nothing moves.`;
       pendingPayMint = payMint;
