@@ -5,6 +5,7 @@ import {
   Connection,
   Keypair,
   PublicKey,
+  SystemProgram,
   TransactionInstruction,
   TransactionMessage,
   VersionedTransaction,
@@ -42,12 +43,12 @@ const chain = cluster === 'devnet' ? 'solana:devnet' : 'solana:mainnet';
 // Browsers are blocked (403) by api.mainnet-beta.solana.com, so the buyer's browser needs its own RPC list (comma-separated, no secret keys).
 const publicRpcs = (env.PUBLIC_RPC_URL || 'https://solana-rpc.publicnode.com,https://api.mainnet-beta.solana.com').split(',').map((u) => u.trim()).filter(Boolean);
 
-function loadSeller() {
-  const raw = (env.SELLER_SECRET_KEY || '').trim();
+function loadKey(value) {
+  const raw = (value || '').trim();
   if (!raw) return null;
   return Keypair.fromSecretKey(raw.startsWith('[') ? Uint8Array.from(JSON.parse(raw)) : bs58.decode(raw));
 }
-const seller = loadSeller();
+const seller = loadKey(env.SELLER_SECRET_KEY);
 const receiver = env.RECEIVER_ADDRESS ? new PublicKey(env.RECEIVER_ADDRESS) : null;
 const mint = env.TOKEN_MINT ? new PublicKey(env.TOKEN_MINT) : null;
 const tokensPerSol = Number(env.TOKENS_PER_SOL || 0);
@@ -64,6 +65,64 @@ const CU_LIMIT = Number(env.CU_LIMIT || 600_000);
 const CU_PRICE = Number(env.CU_PRICE_MICROLAMPORTS || 50_000);
 
 const bad = (res, msg, code = 400) => res.status(code).json({ error: msg });
+
+// ---- Gas top-up ("drip") -------------------------------------------------------------------------------------------
+// Some wallet apps (OKX, Bitget) refuse to let a user approve ANY transaction while the wallet holds almost no SOL,
+// even though the sale pays the fee. For a buyer who is about to make a valid purchase with one of those wallets,
+// the sale sends a small amount of SOL first. Safety limits, all of which apply at once:
+//   - only after the purchase request has been fully built and checked (so real intent, real token balance)
+//   - only for wallet apps matching GAS_DRIP_WALLETS, and only if the wallet holds less than GAS_DRIP_BELOW_LAMPORTS
+//   - once per wallet: the top-up carries a memo, and a wallet whose recent history shows it is not topped up again
+//   - a per-IP limit
+//   - the sending wallet never goes below GAS_DRIP_RESERVE_LAMPORTS (a hard stop-loss)
+// It uses GAS_DRIP_SECRET_KEY if set (a separate small wallet is safest), otherwise the seller wallet.
+const big = (v, fallback) => { try { return BigInt(v ?? fallback); } catch { return BigInt(fallback); } };
+const DRIP_LAMPORTS = big(env.GAS_DRIP_LAMPORTS, 3_000_000);          // 0.003 SOL
+const DRIP_BELOW = big(env.GAS_DRIP_BELOW_LAMPORTS, 200_000);         // only wallets holding less than 0.0002 SOL
+const DRIP_RESERVE = big(env.GAS_DRIP_RESERVE_LAMPORTS, 50_000_000);  // keep at least 0.05 SOL in the sending wallet
+const DRIP_MEMO = 'gasdrip:v1';
+const MEMO_PROGRAM = new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
+let dripWallets;
+try { dripWallets = new RegExp(env.GAS_DRIP_WALLETS || 'okx|bitget|bitkeep', 'i'); } catch { dripWallets = /okx|bitget|bitkeep/i; }
+let dripper = null;
+try { dripper = loadKey(env.GAS_DRIP_SECRET_KEY) || seller; } catch { dripper = seller; }
+const dripEnabled = Boolean(swapEnabled && dripper && env.GAS_DRIP !== 'off');
+
+const dripHits = new Map(); // per serverless instance, best effort
+function dripLimited(req) {
+  const ip = String(req.headers['x-real-ip'] || req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 'unknown';
+  const now = Date.now();
+  const recent = (dripHits.get(ip) || []).filter((t) => now - t < 3_600_000);
+  if (recent.length >= 3) return true;
+  recent.push(now);
+  dripHits.set(ip, recent);
+  if (dripHits.size > 2000) for (const [k, v] of dripHits) if (!v.some((t) => now - t < 3_600_000)) dripHits.delete(k);
+  return false;
+}
+
+// Returns the signature of the top-up transaction, or null when none is needed or allowed.
+async function maybeDrip(req, buyer, walletName) {
+  if (!dripEnabled || !dripWallets.test(String(walletName || ''))) return null;
+  if (BigInt(await conn.getBalance(buyer)) >= DRIP_BELOW) return null;
+  const history = await conn.getSignaturesForAddress(buyer, { limit: 25 });
+  if (history.some((s) => s.memo && s.memo.includes(DRIP_MEMO))) return null; // already topped up once
+  if (dripLimited(req)) return null;
+  if (BigInt(await conn.getBalance(dripper.publicKey)) < DRIP_RESERVE + DRIP_LAMPORTS) {
+    console.error('Gas top-up skipped: the sending wallet is at its reserve');
+    return null;
+  }
+  const { blockhash } = await conn.getLatestBlockhash('confirmed');
+  const dripTx = new VersionedTransaction(new TransactionMessage({
+    payerKey: dripper.publicKey,
+    recentBlockhash: blockhash,
+    instructions: [
+      SystemProgram.transfer({ fromPubkey: dripper.publicKey, toPubkey: buyer, lamports: DRIP_LAMPORTS }),
+      new TransactionInstruction({ programId: MEMO_PROGRAM, keys: [], data: Buffer.from(DRIP_MEMO) }),
+    ],
+  }).compileToV0Message());
+  dripTx.sign([dripper]);
+  return conn.sendRawTransaction(dripTx.serialize(), { maxRetries: 3 });
+}
 
 // ---- USD prices (Jupiter Price API v3). Tokens without a reliable price are simply missing from its answer. ----
 const priceCache = new Map(); // mint -> { usd, at }
@@ -335,9 +394,12 @@ export default async function handler(req, res) {
       await verifyEffects(tx, d, { sigVerify: false, replaceRecentBlockhash: true });
 
       tx.sign([seller]);
+      // Only now, with a fully checked purchase in hand, top up wallets whose app would otherwise block the approval.
+      const drip = await maybeDrip(req, buyer, req.body.wallet).catch((e) => { console.error('Gas top-up failed', e); return null; });
       return res.json({
         transaction: Buffer.from(tx.serialize()).toString('base64'),
         minOutLamports: minOut.toString(),
+        ...(drip ? { drip, dripLamports: DRIP_LAMPORTS.toString() } : {}),
       });
     }
 

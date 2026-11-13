@@ -246,11 +246,14 @@ $('quote').onclick = async () => {
     const token = holdings().find((x) => x.mint === payMint);
     const inUsd = priced(token);
     const amountField = inUsd ? { usd: $('sol').value } : (payMint ? { amount: $('sol').value } : { sol: $('sol').value });
-    const body = payMint ? { buyer: address, payMint, ...amountField } : { buyer: address, ...amountField };
+    const body = payMint ? { buyer: address, payMint, wallet: adapter?.name, ...amountField } : { buyer: address, ...amountField };
     const worth = (units, decimals) => (inUsd ? ` (about ${usd((Number(units) / 10 ** decimals) * token.usdPrice)})` : '');
     const res = await fetch('/api/quote', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Could not get a quote');
+    // Some wallet apps will not let you approve while the wallet holds almost no SOL, so the sale may have just sent
+    // a small top-up. Wait for it to land before showing the summary.
+    if (data.drip) await waitForTopUp(data.drip);
     const tx = VersionedTransaction.deserialize(b64ToBytes(data.transaction));
     const ctx = { seller: pk(config.seller), receiver: pk(config.receiver), mint: pk(config.mint) };
 
@@ -282,6 +285,7 @@ $('quote').onclick = async () => {
       $('s-note').textContent = `Your ${token.symbol} is swapped to SOL (at least ${formatUnits(BigInt(data.minOutLamports), 9)} SOL guaranteed) and the tokens are delivered in the same transaction. If anything fails, nothing moves.`;
       pendingPayMint = payMint;
     }
+    if (data.drip) $('s-note').textContent += ` We also sent ${formatUnits(BigInt(data.dripLamports), 9)} SOL to your wallet so your wallet app can approve this. It is yours to keep.`;
     pendingTx = tx;
     $('s-to').textContent = config.receiver;
     $('summary').hidden = false;
@@ -304,6 +308,17 @@ $('sign').onclick = async () => {
   } catch (e) { setStatus(e.message || 'Signing was cancelled', true); }
   finally { $('sign').disabled = false; }
 };
+
+async function waitForTopUp(sig) {
+  setStatus('Getting your wallet ready (a one-time, free top-up)…');
+  for (let i = 0; i < 25; i++) {
+    const { status } = await (await fetch(`/api/status?sig=${enc(sig)}`)).json();
+    if (status === 'confirmed' || status === 'finalized') return;
+    if (status === 'failed') break;
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  throw new Error('Getting your wallet ready took too long. Please tap Get quote again.');
+}
 
 async function waitForConfirmation(sig) {
   const suffix = config.cluster === 'devnet' ? '?cluster=devnet' : '';
