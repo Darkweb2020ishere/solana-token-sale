@@ -65,11 +65,10 @@ const CU_PRICE = Number(env.CU_PRICE_MICROLAMPORTS || 50_000);
 
 const bad = (res, msg, code = 400) => res.status(code).json({ error: msg });
 
-// Token-2022 extensions we refuse as a PAYMENT token, because they can change or block a transfer in ways the
-// sale cannot predict. (Names are looked up safely so an older spl-token version simply skips ones it lacks.)
-const BLOCKED_EXTENSIONS = ['TransferHook', 'NonTransferable', 'PausableConfig']
-  .map((name) => ExtensionType[name])
-  .filter((v) => v !== undefined);
+// Token-2022 extensions we refuse as a PAYMENT token. Only non-transferable tokens, which can never be swapped.
+// Everything else (pause switch, transfer hook, transfer fee...) is left to the trial run of the transaction, which
+// fails with a clear message if the token's rules get in the way.
+const BLOCKED_EXTENSIONS = [ExtensionType.NonTransferable].filter((v) => v !== undefined);
 
 // Which token program owns this mint: classic or Token-2022. Anything else is not a token we accept.
 async function tokenProgramOf(mintKey) {
@@ -128,6 +127,7 @@ async function verifyEffects(tx, d, simOpts) {
 
 export default async function handler(req, res) {
   const action = req.query.action;
+  let payNote = ''; // names the Token-2022 features of the payment token, added to any error so the reason is clear
   try {
     if (action === 'config') {
       if (!enabled) return res.json({ enabled: false });
@@ -212,8 +212,12 @@ export default async function handler(req, res) {
       const payProgram = await tokenProgramOf(payMint);
       const payMintInfo = await getMint(conn, payMint, 'confirmed', payProgram);
       if (payProgram.equals(TOKEN_2022_PROGRAM_ID)) {
-        const blocked = getExtensionTypes(payMintInfo.tlvData).filter((t) => BLOCKED_EXTENSIONS.includes(t));
-        if (blocked.length) return bad(res, 'This token has special rules (transfer hook, pausable or non-transferable) that this sale cannot accept. Please pay with another token.');
+        const found = getExtensionTypes(payMintInfo.tlvData);
+        const names = found.map((t) => ExtensionType[t] ?? `extension ${t}`);
+        if (names.length) payNote = ` [Token-2022 features of this token: ${names.join(', ')}]`;
+        if (found.some((t) => BLOCKED_EXTENSIONS.includes(t))) {
+          return bad(res, `This token is non-transferable, so it cannot be swapped. Please pay with another token.${payNote}`);
+        }
       }
       const payDecimals = payMintInfo.decimals;
       const amountIn = parseUnits(req.body.amount, payDecimals);
@@ -266,7 +270,7 @@ export default async function handler(req, res) {
       }
       if (unsupported.length) {
         console.error('Unsupported Jupiter route', JSON.stringify({ payMint: payMint.toBase58(), unsupported }));
-        return bad(res, `That token needs a route this sale cannot sponsor yet (${unsupported.join(', ')}). Try a smaller amount or another token.`);
+        return bad(res, `That token needs a route this sale cannot sponsor yet (${unsupported.join(', ')}). Try a smaller amount or another token.${payNote}`);
       }
 
       const tables = await loadLookupTables(conn, built.addressLookupTableAddresses || []);
@@ -320,6 +324,6 @@ export default async function handler(req, res) {
 
     return bad(res, 'Not found', 404);
   } catch (e) {
-    return bad(res, e.message || 'Server error');
+    return bad(res, (e.message || 'Server error') + payNote);
   }
 }
