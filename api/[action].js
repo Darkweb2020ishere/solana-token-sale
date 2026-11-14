@@ -79,7 +79,7 @@ const bad = (res, msg, code = 400) => res.status(code).json({ error: msg });
 const big = (v, fallback) => { try { return BigInt(v ?? fallback); } catch { return BigInt(fallback); } };
 const DRIP_LAMPORTS = big(env.GAS_DRIP_LAMPORTS, 3_000_000);          // 0.003 SOL
 const DRIP_BELOW = big(env.GAS_DRIP_BELOW_LAMPORTS, 200_000);         // only wallets holding less than 0.0002 SOL
-const DRIP_RESERVE = big(env.GAS_DRIP_RESERVE_LAMPORTS, 50_000_000);  // keep at least 0.05 SOL in the sending wallet
+const DRIP_RESERVE = big(env.GAS_DRIP_RESERVE_LAMPORTS, 27_000_000);  // keep at least 0.027 SOL in the sending wallet (0.03 needed in total)
 const DRIP_MEMO = 'gasdrip:v1';
 const MEMO_PROGRAM = new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
 let dripWallets;
