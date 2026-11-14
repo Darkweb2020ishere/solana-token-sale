@@ -60,6 +60,9 @@ const enabled = Boolean(seller && receiver && mint && tokensPerSol > 0);
 const JUP = (env.JUPITER_BASE || 'https://api.jup.ag').replace(/\/$/, '');
 const jupHeaders = { 'content-type': 'application/json', ...(env.JUPITER_API_KEY ? { 'x-api-key': env.JUPITER_API_KEY } : {}) };
 const swapEnabled = enabled && cluster === 'mainnet-beta' && Boolean(env.JUPITER_API_KEY);
+// Public project id (not a secret) from dashboard.reown.com, used so Jupiter Mobile can connect through WalletConnect.
+// Override it with the WALLETCONNECT_PROJECT_ID setting in Vercel if you ever create a new project.
+const walletConnectProjectId = env.WALLETCONNECT_PROJECT_ID || 'be9e297f5ca6b4ba130a4a31b84e2f5f';
 const SLIPPAGE_BPS = Number(env.SLIPPAGE_BPS || 150);
 const CU_LIMIT = Number(env.CU_LIMIT || 600_000);
 const CU_PRICE = Number(env.CU_PRICE_MICROLAMPORTS || 50_000);
@@ -224,7 +227,7 @@ export default async function handler(req, res) {
       if (!enabled) return res.json({ enabled: false });
       const { decimals } = await getMint(conn, mint);
       return res.json({
-        enabled: true, chain, cluster, publicRpcs, swapEnabled,
+        enabled: true, chain, cluster, publicRpcs, swapEnabled, walletConnectProjectId,
         seller: seller.publicKey.toBase58(), receiver: receiver.toBase58(), mint: mint.toBase58(),
         decimals, tokensPerSol,
         minSol: Number(minLamports) / LAMPORTS_PER_SOL, maxSol: Number(maxLamports) / LAMPORTS_PER_SOL,
