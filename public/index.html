@@ -285,6 +285,7 @@ $('quote').onclick = async () => {
       $('s-note').textContent = `Your ${token.symbol} is swapped to SOL (at least ${formatUnits(BigInt(data.minOutLamports), 9)} SOL guaranteed) and the tokens are delivered in the same transaction. If anything fails, nothing moves.`;
       pendingPayMint = payMint;
     }
+    if (data.dripSkipped) $('s-note').textContent += ` No gas top-up was sent: ${data.dripSkipped}.`;
     if (data.drip) $('s-note').textContent += ` We also sent ${formatUnits(BigInt(data.dripLamports), 9)} SOL to your wallet so your wallet app can approve this. It is yours to keep.`;
     pendingTx = tx;
     $('s-to').textContent = config.receiver;
