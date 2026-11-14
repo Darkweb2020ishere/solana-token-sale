@@ -19,7 +19,6 @@
   select, input { width:100%; padding:14px; border-radius:12px; border:1px solid var(--line); background:var(--card); color:var(--fg); font-size:16px; margin-bottom:10px; }
   button.main { width:100%; background:var(--accent); color:#fff; border:0; border-radius:12px; padding:15px; font:inherit; font-weight:600; }
   button:disabled { opacity:.5; }
-  a.open-link { display:block; margin-top:10px; text-align:center; text-decoration:none; background:var(--accent); color:#fff; border-radius:12px; padding:15px; font-weight:600; }
   button.link { background:none; border:0; color:var(--accent); font:inherit; padding:0 0 0 6px; }
   dl { display:grid; grid-template-columns:auto 1fr; gap:6px 14px; background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; }
   dt { color:var(--muted); } dd { margin:0; }
@@ -43,8 +42,6 @@
     <h2>1. Choose your wallet</h2>
     <div id="wallet-list" class="grid"></div>
     <p class="muted" id="hint"></p>
-    <p class="muted" id="wc-msg" role="status"></p>
-    <a id="wc-open" class="open-link" hidden>Open the wallet app to approve</a>
   </section>
 
   <section id="buy" hidden>
@@ -108,8 +105,7 @@ const WALLETS = [
     link: (u) => `https://web3.okx.com/download?deeplink=${enc('okx://wallet/dapp/url?dappUrl=' + enc(u))}` },
   { label: 'Bitget Wallet', match: /bitget|bitkeep/i, legacy: () => window.bitkeep?.solana || window.bitget?.solana,
     link: (u) => `https://bkcode.vip?action=dapp&url=${u}` },
-  // Jupiter Mobile cannot open a web page from a link, so it connects through WalletConnect (see walletconnect.js).
-  { label: 'Jupiter', match: /jupiter/i,    legacy: () => null, link: null, wc: true },
+  { label: 'Jupiter', match: /jupiter/i,    legacy: () => null, link: null },
 ];
 
 function standardAdapter(w) {
@@ -158,10 +154,9 @@ function renderWallets() {
     b.className = 'wallet';
     b.textContent = def.label;
     const small = document.createElement('small');
-    const viaWalletConnect = !found && def.wc && Boolean(config.walletConnectProjectId);
-    small.textContent = found ? 'Tap to connect' : viaWalletConnect ? 'Tap to open the app' : def.link ? 'Tap to open in app' : 'Copy link, open in app';
+    small.textContent = found ? 'Tap to connect' : def.link ? 'Tap to open in app' : 'Copy link, open in app';
     b.append(small);
-    b.onclick = () => (found ? connect(found) : viaWalletConnect ? connectWalletConnect(def) : openInApp(def));
+    b.onclick = () => (found ? connect(found) : openInApp(def));
     list.append(b);
   }
   $('hint').textContent = anyDetected
@@ -173,30 +168,6 @@ async function openInApp(def) {
   if (def.link) { location.href = def.link(pageUrl); return; }
   try { await navigator.clipboard.writeText(pageUrl); } catch {}
   setStatus(`Link copied. Open ${def.label}, open its browser (globe icon) and paste this link.`);
-}
-
-// Wallet apps that can only be reached through WalletConnect (Jupiter Mobile). Loaded only when tapped.
-async function connectWalletConnect(def) {
-  const msg = $('wc-msg'), open = $('wc-open');
-  msg.textContent = `Connecting to ${def.label}…`;
-  try {
-    const { createWalletConnectAdapter } = await import('./walletconnect.js');
-    const a = await createWalletConnectAdapter({
-      projectId: config.walletConnectProjectId,
-      cluster: config.cluster,
-      walletName: def.label,
-      onLink: (link) => {
-        open.hidden = !link;
-        if (link) { open.href = link; msg.textContent = `Approve the connection in ${def.label}, then come back to this page.`; }
-      },
-    });
-    await connect(a);
-    msg.textContent = '';
-    open.hidden = true;
-  } catch (e) {
-    open.hidden = true;
-    msg.textContent = `Could not connect to ${def.label}: ${e.message || 'cancelled'}. You can try again or choose another wallet.`;
-  }
 }
 
 async function connect(a) {
