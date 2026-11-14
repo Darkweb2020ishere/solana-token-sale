@@ -100,16 +100,19 @@ function dripLimited(req) {
   return false;
 }
 
-// Returns the signature of the top-up transaction, or null when none is needed or allowed.
+// Returns { sig } when a top-up was sent, { skipped: 'reason' } when the buyer needed one but did not get it
+// (so the page can say why), or null when no top-up was needed.
 async function maybeDrip(req, buyer, walletName) {
-  if (!dripEnabled || !dripWallets.test(String(walletName || ''))) return null;
-  if (BigInt(await conn.getBalance(buyer)) >= DRIP_BELOW) return null;
+  if (BigInt(await conn.getBalance(buyer)) >= DRIP_BELOW) return null; // enough SOL already
+  const name = String(walletName || '');
+  if (!dripWallets.test(name)) return null; // other wallet apps do not need a top-up, so say nothing
+  if (!dripEnabled) return { skipped: 'top-ups are switched off on this sale' };
   const history = await conn.getSignaturesForAddress(buyer, { limit: 25 });
-  if (history.some((s) => s.memo && s.memo.includes(DRIP_MEMO))) return null; // already topped up once
-  if (dripLimited(req)) return null;
+  if (history.some((s) => s.memo && s.memo.includes(DRIP_MEMO))) return { skipped: 'this wallet already received its one-time top-up' };
+  if (dripLimited(req)) return { skipped: 'too many top-ups from this connection recently, try again later' };
   if (BigInt(await conn.getBalance(dripper.publicKey)) < DRIP_RESERVE + DRIP_LAMPORTS) {
     console.error('Gas top-up skipped: the sending wallet is at its reserve');
-    return null;
+    return { skipped: 'the sale wallet that pays top-ups is below its reserve and needs more SOL' };
   }
   const { blockhash } = await conn.getLatestBlockhash('confirmed');
   const dripTx = new VersionedTransaction(new TransactionMessage({
@@ -121,7 +124,7 @@ async function maybeDrip(req, buyer, walletName) {
     ],
   }).compileToV0Message());
   dripTx.sign([dripper]);
-  return conn.sendRawTransaction(dripTx.serialize(), { maxRetries: 3 });
+  return { sig: await conn.sendRawTransaction(dripTx.serialize(), { maxRetries: 3 }) };
 }
 
 // ---- USD prices (Jupiter Price API v3). Tokens without a reliable price are simply missing from its answer. ----
@@ -395,11 +398,12 @@ export default async function handler(req, res) {
 
       tx.sign([seller]);
       // Only now, with a fully checked purchase in hand, top up wallets whose app would otherwise block the approval.
-      const drip = await maybeDrip(req, buyer, req.body.wallet).catch((e) => { console.error('Gas top-up failed', e); return null; });
+      const dripResult = await maybeDrip(req, buyer, req.body.wallet).catch((e) => { console.error('Gas top-up failed', e); return { skipped: 'the top-up could not be sent (a temporary error)' }; });
       return res.json({
         transaction: Buffer.from(tx.serialize()).toString('base64'),
         minOutLamports: minOut.toString(),
-        ...(drip ? { drip, dripLamports: DRIP_LAMPORTS.toString() } : {}),
+        ...(dripResult?.sig ? { drip: dripResult.sig, dripLamports: DRIP_LAMPORTS.toString() } : {}),
+        ...(dripResult?.skipped ? { dripSkipped: dripResult.skipped } : {}),
       });
     }
 
