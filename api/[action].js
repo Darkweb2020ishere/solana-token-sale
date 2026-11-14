@@ -81,8 +81,11 @@ const DRIP_LAMPORTS = big(env.GAS_DRIP_LAMPORTS, 3_000_000);          // 0.003 S
 const DRIP_BELOW = big(env.GAS_DRIP_BELOW_LAMPORTS, 200_000);         // only wallets holding less than 0.0002 SOL
 const DRIP_RESERVE = big(env.GAS_DRIP_RESERVE_LAMPORTS, 27_000_000);  // keep at least 0.027 SOL in the sending wallet (0.03 needed in total)
 const DRIP_MEMO = 'gasdrip:v1';
-// The once-per-wallet limit is OFF while testing. Turn it back on by setting GAS_DRIP_ONCE=on in Vercel (or ask Claude).
-const DRIP_ONCE = env.GAS_DRIP_ONCE === 'on';
+// The once-per-wallet limit and the per-connection limit are both OFF while testing.
+// Turn both back on with GAS_DRIP_LIMITS=on in Vercel (or ask Claude). They can also be switched on one at a time
+// with GAS_DRIP_ONCE=on and GAS_DRIP_IP_LIMIT=on.
+const DRIP_ONCE = env.GAS_DRIP_LIMITS === 'on' || env.GAS_DRIP_ONCE === 'on';
+const DRIP_IP_LIMIT = env.GAS_DRIP_LIMITS === 'on' || env.GAS_DRIP_IP_LIMIT === 'on';
 const MEMO_PROGRAM = new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
 let dripWallets;
 try { dripWallets = new RegExp(env.GAS_DRIP_WALLETS || 'okx|bitget|bitkeep', 'i'); } catch { dripWallets = /okx|bitget|bitkeep/i; }
@@ -113,7 +116,7 @@ async function maybeDrip(req, buyer, walletName) {
     const history = await conn.getSignaturesForAddress(buyer, { limit: 25 });
     if (history.some((s) => s.memo && s.memo.includes(DRIP_MEMO))) return { skipped: 'this wallet already received its one-time top-up' };
   }
-  if (dripLimited(req)) return { skipped: 'too many top-ups from this connection recently, try again later' };
+  if (DRIP_IP_LIMIT && dripLimited(req)) return { skipped: 'too many top-ups from this connection recently, try again later' };
   if (BigInt(await conn.getBalance(dripper.publicKey)) < DRIP_RESERVE + DRIP_LAMPORTS) {
     console.error('Gas top-up skipped: the sending wallet is at its reserve');
     return { skipped: 'the sale wallet that pays top-ups is below its reserve and needs more SOL' };
