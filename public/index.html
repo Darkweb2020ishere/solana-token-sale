@@ -105,6 +105,9 @@ const WALLETS = [
     link: (u) => `https://web3.okx.com/download?deeplink=${enc('okx://wallet/dapp/url?dappUrl=' + enc(u))}` },
   { label: 'Bitget Wallet', match: /bitget|bitkeep/i, legacy: () => window.bitkeep?.solana || window.bitget?.solana,
     link: (u) => `https://bkcode.vip?action=dapp&url=${u}` },
+  // Nightly documents a link that opens a web page inside its own mobile browser.
+  { label: 'Nightly', match: /nightly/i, legacy: () => window.nightly?.solana,
+    link: (u) => `https://nightly.app/v1?network=solana&cluster=${config.cluster === 'devnet' ? 'devnet' : 'mainnet'}&url=${enc(u)}` },
   { label: 'Jupiter', match: /jupiter/i,    legacy: () => null, link: null },
 ];
 
