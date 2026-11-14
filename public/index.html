@@ -105,6 +105,13 @@ const WALLETS = [
     link: (u) => `https://web3.okx.com/download?deeplink=${enc('okx://wallet/dapp/url?dappUrl=' + enc(u))}` },
   { label: 'Bitget Wallet', match: /bitget|bitkeep/i, legacy: () => window.bitkeep?.solana || window.bitget?.solana,
     link: (u) => `https://bkcode.vip?action=dapp&url=${u}` },
+  // Added by request. None of these publish an "open this page in the app" link, so the button copies the page link
+  // for the user to paste into the wallet's own browser. They connect automatically when this page is opened inside
+  // the wallet's browser (or its desktop extension).
+  { label: 'Moonshot', match: /moonshot/i, legacy: () => null, link: null },
+  { label: 'Atomic Wallet', match: /atomic/i, legacy: () => null, link: null },
+  { label: 'Glow', match: /glow/i, legacy: () => window.glow?.solana, link: null },
+  { label: 'Exodus', match: /exodus/i, legacy: () => window.exodus?.solana, link: null },
   { label: 'Jupiter', match: /jupiter/i,    legacy: () => null, link: null },
 ];
 
