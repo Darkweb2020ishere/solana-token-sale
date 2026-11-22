@@ -11,7 +11,11 @@
     "@jup-ag/jup-mobile-adapter": "latest",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "buffer": "^6.0.3"
+    "buffer": "^6.0.3",
+    "@reown/appkit": "latest",
+    "@reown/appkit-adapter-solana": "latest",
+    "@reown/appkit-wallet-button": "latest",
+    "@solana/wallet-adapter-base": "latest"
   },
   "overrides": {
     "rpc-websockets": "9.1.1"
