@@ -184,24 +184,37 @@ async function openInApp(def) {
 // Wallet apps that can only be reached through WalletConnect (Jupiter Mobile). Loaded only when tapped.
 async function connectWalletConnect(def) {
   const msg = $('wc-msg'), open = $('wc-open');
-  const say = (t) => { msg.textContent = t; };
-  // Test build: show any hidden error on the page so it can be screenshotted.
-  const onErr = (ev) => say(`Error: ${ev.message || ev.reason?.message || ev.reason || 'unknown'}`);
+  // TEST BUILD: a visible log so a screenshot shows exactly where this stops.
+  let box = $('wc-log');
+  if (!box) { box = document.createElement('pre'); box.id = 'wc-log'; box.style.cssText = 'white-space:pre-wrap;font-size:11px;color:#9aa;max-height:240px;overflow:auto;margin:8px 0'; msg.after(box); }
+  const t0 = Date.now();
+  const log = (t) => { box.textContent += `[${((Date.now() - t0) / 1000).toFixed(1)}s] ${String(t).slice(0, 300)}\n`; };
+  box.textContent = '';
+  msg.textContent = 'Connecting to Jupiter… (test build direct-v2)';
+  const keep = { error: console.error, warn: console.warn };
+  console.error = (...a) => { log('console.error: ' + a.map((x) => x?.message || x).join(' ')); keep.error(...a); };
+  console.warn = (...a) => { log('console.warn: ' + a.map((x) => x?.message || x).join(' ')); keep.warn(...a); };
+  const onErr = (ev) => log(`page error: ${ev.message || ev.reason?.message || ev.reason || 'unknown'}`);
   addEventListener('error', onErr); addEventListener('unhandledrejection', onErr);
-  say('Step 1/4: loading Jupiter connect…');
+  const slow = setTimeout(() => log('still working… (slow network?)'), 8000);
   try {
+    log('1 downloading Jupiter connect code');
     const mod = await import('./jupiter-bundle.js');
-    say('Step 2/4: starting…');
+    log('2 downloaded; starting Reown');
     const a = await mod.createJupiterAdapter({ projectId: config.walletConnectProjectId, cluster: config.cluster });
-    say('Step 3/4: opening the connect window…');
+    log('3 ready; asking Reown to open Jupiter');
     await connect(a);
-    say('');
+    log('4 connect finished');
+    msg.textContent = '';
     open.hidden = true;
   } catch (e) {
     open.hidden = true;
-    say(`Could not connect to ${def.label} (${e?.name || 'Error'}): ${e?.message || 'cancelled'}`);
+    log(`FAILED (${e?.name || 'Error'}): ${e?.message || 'cancelled'}`);
+    msg.textContent = `Could not connect to ${def.label}: ${e?.message || 'cancelled'}`;
   } finally {
+    clearTimeout(slow);
     removeEventListener('error', onErr); removeEventListener('unhandledrejection', onErr);
+    console.error = keep.error; console.warn = keep.warn;
   }
 }
 
