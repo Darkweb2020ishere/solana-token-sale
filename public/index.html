@@ -190,7 +190,7 @@ async function connectWalletConnect(def) {
   const t0 = Date.now();
   const log = (t) => { box.textContent += `[${((Date.now() - t0) / 1000).toFixed(1)}s] ${String(t).slice(0, 300)}\n`; };
   box.textContent = '';
-  msg.textContent = 'Connecting to Jupiter… (test build jupiter-link-v3)';
+  msg.textContent = 'Connecting to Jupiter… (test build readme-exact-v4)';
   try {
     log('1 downloading Jupiter connect code');
     const mod = await import('./jupiter-bundle.js');
