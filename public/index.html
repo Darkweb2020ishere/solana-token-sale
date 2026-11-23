@@ -181,16 +181,24 @@ async function openInApp(def) {
 // Wallet apps that can only be reached through WalletConnect (Jupiter Mobile). Loaded only when tapped.
 async function connectWalletConnect(def) {
   const msg = $('wc-msg'), open = $('wc-open');
-  msg.textContent = `Connecting to ${def.label}…`;
+  const say = (t) => { msg.textContent = t; };
+  // Test build: show any hidden error on the page so it can be screenshotted.
+  const onErr = (ev) => say(`Error: ${ev.message || ev.reason?.message || ev.reason || 'unknown'}`);
+  addEventListener('error', onErr); addEventListener('unhandledrejection', onErr);
+  say('Step 1/4: loading Jupiter connect…');
   try {
-    const { createJupiterAdapter } = await import('./jupiter-bundle.js');
-    const a = await createJupiterAdapter({ projectId: config.walletConnectProjectId });
+    const mod = await import('./jupiter-bundle.js');
+    say('Step 2/4: starting…');
+    const a = await mod.createJupiterAdapter({ projectId: config.walletConnectProjectId });
+    say('Step 3/4: opening the connect window…');
     await connect(a);
-    msg.textContent = '';
+    say('');
     open.hidden = true;
   } catch (e) {
     open.hidden = true;
-    msg.textContent = `Could not connect to ${def.label}: ${e.message || 'cancelled'}. You can try again or choose another wallet.`;
+    say(`Could not connect to ${def.label} (${e?.name || 'Error'}): ${e?.message || 'cancelled'}`);
+  } finally {
+    removeEventListener('error', onErr); removeEventListener('unhandledrejection', onErr);
   }
 }
 
@@ -205,7 +213,11 @@ async function connect(a) {
     $('buy').hidden = false;
     setStatus('');
     loadTokens(address);
-  } catch (e) { setStatus(e.message || 'Connection cancelled', true); }
+  } catch (e) {
+    setStatus(e.message || 'Connection cancelled', true);
+    // The status line is hidden before a wallet connects, so show the problem under the wallet list too.
+    $('wc-msg').textContent = `Could not connect: ${e?.message || 'cancelled'}`;
+  }
 }
 
 const usd = (v) => (v > 0 && v < 0.01 ? '<$0.01' : v.toLocaleString(undefined, { style: 'currency', currency: 'USD' }));
