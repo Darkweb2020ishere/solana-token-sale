@@ -192,7 +192,7 @@ async function connectWalletConnect(def) {
   try {
     const mod = await import('./jupiter-bundle.js');
     say('Step 2/4: starting…');
-    const a = await mod.createJupiterAdapter({ projectId: config.walletConnectProjectId });
+    const a = await mod.createJupiterAdapter({ projectId: config.walletConnectProjectId, cluster: config.cluster });
     say('Step 3/4: opening the connect window…');
     await connect(a);
     say('');
