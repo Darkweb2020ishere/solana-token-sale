@@ -108,7 +108,8 @@ const WALLETS = [
   // Nightly documents a link that opens a web page inside its own mobile browser.
   { label: 'Nightly', match: /nightly/i, legacy: () => window.nightly?.solana,
     link: (u) => `https://nightly.app/v1?network=solana&cluster=${config.cluster === 'devnet' ? 'devnet' : 'mainnet'}&url=${enc(u)}` },
-  { label: 'Jupiter', match: /jupiter/i,    legacy: () => null, link: null },
+  // Jupiter Mobile opens the page in its own browser through jupiter://browse/<page> (tested on iPhone).
+  { label: 'Jupiter', match: /jupiter/i,    legacy: () => null, link: (u) => `jupiter://browse/${enc(u)}` },
 ];
 
 function standardAdapter(w) {
