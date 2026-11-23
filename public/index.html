@@ -175,7 +175,8 @@ function renderWallets() {
 async function openInApp(def) {
   if (def.link) { location.href = def.link(pageUrl); return; }
   try { await navigator.clipboard.writeText(pageUrl); } catch {}
-  setStatus(`Link copied. Open ${def.label}, open its browser (globe icon) and paste this link.`);
+  // The normal status line is hidden until a wallet connects, so show this under the wallet list instead.
+  $('hint').textContent = `Link copied. Now open ${def.label}, open its browser (globe icon) and paste this link.`;
 }
 
 // Wallet apps that can only be reached through WalletConnect (Jupiter Mobile). Loaded only when tapped.
