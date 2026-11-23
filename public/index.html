@@ -162,6 +162,8 @@ function renderWallets() {
     b.textContent = def.label;
     const small = document.createElement('small');
     const viaWalletConnect = !found && def.wc && Boolean(config.walletConnectProjectId);
+    // Download Jupiter's connect code quietly in the background so the first tap is instant.
+    if (viaWalletConnect && !window.__jupPreload) { window.__jupPreload = true; setTimeout(() => import('./jupiter-bundle.js').catch(() => {}), 1500); }
     small.textContent = found ? 'Tap to connect' : viaWalletConnect ? 'Tap to open the app' : def.link ? 'Tap to open in app' : 'Copy link, open in app';
     b.append(small);
     b.onclick = () => (found ? connect(found) : viaWalletConnect ? connectWalletConnect(def) : openInApp(def));
