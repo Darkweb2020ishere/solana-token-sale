@@ -1,79 +1,74 @@
-// Jupiter Mobile connect. Built by `npm run build` into public/jupiter-bundle.js and loaded only when a buyer taps Jupiter.
-// Same pieces as Jupiter's own adapter (@jup-ag/jup-mobile-adapter), but WITHOUT its extra generic QR window:
-// it asks Reown's wallet button for Jupiter directly, which opens the Jupiter app.
-import React, { useEffect, useRef } from 'react';
-import { createRoot } from 'react-dom/client';
+// Jupiter Mobile connect over WalletConnect, using Jupiter's own link format:
+//   connect: jupiter://wc?uri=<walletconnect uri>
+// Built by `npm run build` into public/jupiter-bundle.js and loaded only when a buyer taps Jupiter.
+// The link is shown as a real button the buyer taps (iOS only reliably opens apps from a direct tap).
+import UniversalProvider from '@walletconnect/universal-provider';
 import { VersionedTransaction } from '@solana/web3.js';
-import { SolanaAdapter } from '@reown/appkit-adapter-solana';
-import * as networks from '@reown/appkit/networks';
-import { createAppKit, useAppKitAccount, useAppKitProvider, useDisconnect } from '@reown/appkit/react';
-import { useAppKitWallet } from '@reown/appkit-wallet-button/react';
 
-let ready = null;
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-function Boot({ onApi }) {
-  const { connect } = useAppKitWallet();
-  const account = useAppKitAccount();
-  const { walletProvider } = useAppKitProvider('solana');
-  const { disconnect } = useDisconnect();
-  const api = useRef({});
-  api.current = { connect, account, provider: walletProvider, disconnect };
-  useEffect(() => { onApi(api); }, []);
-  return null;
+const CHAINS = {
+  'mainnet-beta': 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp',
+  devnet: 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1',
+};
+const B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+function base58Decode(text) {
+  let n = 0n;
+  for (const ch of text) { const i = B58.indexOf(ch); if (i < 0) throw new Error('Bad signature from the wallet'); n = n * 58n + BigInt(i); }
+  const bytes = [];
+  while (n > 0n) { bytes.unshift(Number(n & 0xffn)); n >>= 8n; }
+  for (const ch of text) { if (ch === '1') bytes.unshift(0); else break; }
+  return Uint8Array.from(bytes);
 }
+const b64ToBytes = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+const bytesToB64 = (bytes) => { let s = ''; for (const b of bytes) s += String.fromCharCode(b); return btoa(s); };
 
-function load(projectId, cluster) {
-  if (ready) return ready;
-  ready = new Promise((resolve, reject) => {
-    try {
-      createAppKit({
-        adapters: [new SolanaAdapter({ wallets: [] })],
-        networks: [cluster === 'devnet' ? networks.solanaDevnet : networks.solana],
-        projectId,
-        metadata: {
-          name: document.title || 'Token Sale',
-          description: 'Token sale',
-          url: location.origin,
-          icons: [`${location.origin}/favicon.ico`],
-        },
-        features: { analytics: false, socials: false, email: false },
-        enableWallets: false,
-      });
-    } catch (e) { reject(e); return; }
-    const host = document.createElement('div');
-    host.style.display = 'none';
-    document.body.append(host);
-    const timer = setTimeout(() => reject(new Error('Jupiter connect did not start')), 15000);
-    createRoot(host).render(React.createElement(Boot, { onApi: (api) => { clearTimeout(timer); resolve(api); } }));
+export async function createJupiterAdapter({ projectId, cluster, log = () => {} }) {
+  const chain = CHAINS[cluster] || CHAINS['mainnet-beta'];
+  const provider = await UniversalProvider.init({
+    projectId,
+    metadata: {
+      name: document.title || 'Token Sale',
+      description: 'Token sale',
+      url: location.origin,
+      icons: [`${location.origin}/favicon.ico`],
+    },
   });
-  return ready;
-}
-
-export async function createJupiterAdapter({ projectId, cluster }) {
-  const api = await load(projectId, cluster);
+  log('WalletConnect ready');
   let address = null;
-  return {
+  const adapter = {
     name: 'Jupiter',
+    onLink: null, // the page sets this; called with a link to show as a button, or null to hide it
     async connect() {
-      if (!api.current.provider?.publicKey) {
-        try { await api.current.connect('jupiter'); } catch { /* the loop below reports a timeout if nothing connects */ }
-      }
-      const end = Date.now() + 120000;
-      while (Date.now() < end) {
-        const key = api.current.provider?.publicKey;
-        if (key) { address = key.toBase58(); return address; }
-        await sleep(500);
-      }
-      throw new Error('Jupiter did not approve in time. Please try again.');
+      try { if (provider.session) await Promise.race([provider.disconnect(), new Promise((r) => setTimeout(r, 3000))]); } catch { /* ignore */ }
+      provider.on('display_uri', (uri) => {
+        const link = `jupiter://wc?uri=${encodeURIComponent(uri)}`;
+        log('pairing link ready - tap the Open Jupiter button');
+        adapter.onLink?.(link);
+      });
+      const session = await provider.connect({
+        namespaces: { solana: { chains: [chain], methods: ['solana_signTransaction', 'solana_signMessage'], events: [] } },
+      });
+      const account = session?.namespaces?.solana?.accounts?.[0];
+      if (!account) throw new Error('Jupiter did not return a Solana account');
+      address = account.split(':')[2];
+      adapter.onLink?.(null);
+      return address;
     },
     async sign(tx) {
-      const p = api.current.provider;
-      if (!p?.signTransaction) throw new Error('Jupiter is not connected');
-      // Use this bundle's own copy of web3.js so the wallet always gets the type it expects.
-      const signed = await p.signTransaction(VersionedTransaction.deserialize(tx.serialize()));
-      return signed.serialize();
+      // Offer a button that brings the buyer back to Jupiter, where the pending request waits for approval.
+      adapter.onLink?.('jupiter://wc');
+      try {
+        const result = await provider.request({ method: 'solana_signTransaction', params: { transaction: bytesToB64(tx.serialize()) } }, chain);
+        if (result?.transaction) return b64ToBytes(result.transaction);
+        if (!result?.signature) throw new Error('The wallet did not sign the transaction');
+        const own = VersionedTransaction.deserialize(tx.serialize());
+        const keys = own.message.staticAccountKeys;
+        const index = keys.findIndex((k, i) => i < own.message.header.numRequiredSignatures && k.toBase58() === address);
+        if (index < 0) throw new Error('Wallet is not a signer of this transaction');
+        own.signatures[index] = base58Decode(result.signature);
+        return own.serialize();
+      } finally { adapter.onLink?.(null); }
     },
-    async disconnect() { try { await api.current.disconnect(); } catch { /* ignore */ } },
+    async disconnect() { try { await provider.disconnect(); } catch { /* ignore */ } },
   };
+  return adapter;
 }

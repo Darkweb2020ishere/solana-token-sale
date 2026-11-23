@@ -186,35 +186,37 @@ async function connectWalletConnect(def) {
   const msg = $('wc-msg'), open = $('wc-open');
   // TEST BUILD: a visible log so a screenshot shows exactly where this stops.
   let box = $('wc-log');
-  if (!box) { box = document.createElement('pre'); box.id = 'wc-log'; box.style.cssText = 'white-space:pre-wrap;font-size:11px;color:#9aa;max-height:240px;overflow:auto;margin:8px 0'; msg.after(box); }
+  if (!box) { box = document.createElement('pre'); box.id = 'wc-log'; box.style.cssText = 'white-space:pre-wrap;font-size:11px;color:#9aa;max-height:200px;overflow:auto;margin:8px 0'; msg.after(box); }
   const t0 = Date.now();
   const log = (t) => { box.textContent += `[${((Date.now() - t0) / 1000).toFixed(1)}s] ${String(t).slice(0, 300)}\n`; };
   box.textContent = '';
-  msg.textContent = 'Connecting to Jupiter… (test build direct-v2)';
-  const keep = { error: console.error, warn: console.warn };
-  console.error = (...a) => { log('console.error: ' + a.map((x) => x?.message || x).join(' ')); keep.error(...a); };
-  console.warn = (...a) => { log('console.warn: ' + a.map((x) => x?.message || x).join(' ')); keep.warn(...a); };
-  const onErr = (ev) => log(`page error: ${ev.message || ev.reason?.message || ev.reason || 'unknown'}`);
-  addEventListener('error', onErr); addEventListener('unhandledrejection', onErr);
-  const slow = setTimeout(() => log('still working… (slow network?)'), 8000);
+  msg.textContent = 'Connecting to Jupiter… (test build jupiter-link-v3)';
   try {
     log('1 downloading Jupiter connect code');
     const mod = await import('./jupiter-bundle.js');
-    log('2 downloaded; starting Reown');
-    const a = await mod.createJupiterAdapter({ projectId: config.walletConnectProjectId, cluster: config.cluster });
-    log('3 ready; asking Reown to open Jupiter');
+    log('2 downloaded; starting');
+    const a = await mod.createJupiterAdapter({ projectId: config.walletConnectProjectId, cluster: config.cluster, log });
+    // A real link the buyer taps (iOS only reliably opens apps from a direct tap). Shown under the wallet list while
+    // connecting, and under the buy button while signing.
+    let signLink = document.getElementById('wc-sign-open');
+    if (!signLink) { signLink = document.createElement('a'); signLink.id = 'wc-sign-open'; signLink.className = 'open-link'; signLink.hidden = true; $('status').after(signLink); }
+    a.onLink = (link) => {
+      const buyVisible = !$('buy').hidden;
+      const el = buyVisible ? signLink : open;
+      open.hidden = true; signLink.hidden = true;
+      if (!link) return;
+      el.href = link; el.textContent = buyVisible ? 'Open Jupiter to approve the payment' : 'Open Jupiter to approve';
+      el.hidden = false;
+      if (!buyVisible) msg.textContent = 'Tap "Open Jupiter to approve", approve there, then come back to this page.';
+    };
+    log('3 asking Jupiter to connect');
     await connect(a);
     log('4 connect finished');
     msg.textContent = '';
-    open.hidden = true;
   } catch (e) {
     open.hidden = true;
     log(`FAILED (${e?.name || 'Error'}): ${e?.message || 'cancelled'}`);
     msg.textContent = `Could not connect to ${def.label}: ${e?.message || 'cancelled'}`;
-  } finally {
-    clearTimeout(slow);
-    removeEventListener('error', onErr); removeEventListener('unhandledrejection', onErr);
-    console.error = keep.error; console.warn = keep.warn;
   }
 }
 
