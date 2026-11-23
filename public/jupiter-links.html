@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Jupiter link tester</title>
+<style>
+ body{font:16px/1.5 -apple-system,system-ui,sans-serif;background:#0d1117;color:#e6edf3;margin:0;padding:16px 16px 48px}
+ h1{font-size:20px} p,li{color:#9aa4b2} a.b{display:block;margin:10px 0;padding:14px;border-radius:12px;background:#1f2937;color:#fff;text-decoration:none;border:1px solid #334155}
+ a.b small{display:block;color:#9aa4b2;word-break:break-all;font-size:11px;margin-top:4px}
+ #where{padding:12px;border-radius:12px;background:#111827;border:1px solid #334155;font-size:13px;word-break:break-all}
+ .ok{color:#7ee787}
+</style></head><body>
+<h1>Jupiter link tester</h1>
+<p>TEST PAGE. Tap each button, one at a time. Each one only opens Jupiter. After each, tell me whether Jupiter showed <b>this page</b> inside its own browser (the globe), or just its home screen.</p>
+<div id="where">Checking where this page is open…</div>
+<div id="links"></div>
+<p>If this page opens inside Jupiter, the box above will say so, and it will list what Jupiter injected.</p>
+<script>
+const here = location.origin + '/jupiter-links.html';
+const U = encodeURIComponent(here), O = encodeURIComponent(location.origin);
+const cands = [
+ ['A  jup.ag/ul/browse', `https://jup.ag/ul/browse/${U}?ref=${O}`],
+ ['B  jup.ag/ul/v1/browse', `https://jup.ag/ul/v1/browse/${U}?ref=${O}`],
+ ['C  jup.ag/ul/browse (no ref)', `https://jup.ag/ul/browse/${U}`],
+ ['D  jup.ag/mobile/browse?url=', `https://jup.ag/mobile/browse?url=${U}`],
+ ['E  jup.ag/browse?url=', `https://jup.ag/browse?url=${U}`],
+ ['F  jupiter://browse/', `jupiter://browse/${U}`],
+ ['G  jupiter://browse?url=', `jupiter://browse?url=${U}`],
+ ['H  jupiter://dapp?url=', `jupiter://dapp?url=${U}`],
+];
+const box = document.getElementById('links');
+for (const [name, href] of cands) {
+  const a = document.createElement('a'); a.className = 'b'; a.href = href; a.textContent = name;
+  const s = document.createElement('small'); s.textContent = href; a.append(s); box.append(a);
+}
+const ua = navigator.userAgent;
+const injected = Object.keys(window).filter((k) => /jup|solana|phantom|wallet/i.test(k));
+const safari = /Safari\//.test(ua);
+document.getElementById('where').innerHTML =
+ (safari ? 'This looks like normal Safari.' : '<span class="ok">NOT normal Safari: this may be inside a wallet app browser.</span>') +
+ '<br>Injected names: ' + (injected.join(', ') || 'none') + '<br>UA: ' + ua;
+</script>
+</body></html>
