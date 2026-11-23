@@ -224,7 +224,7 @@ export default async function handler(req, res) {
   let payNote = ''; // names the Token-2022 features of the payment token, added to any error so the reason is clear
   try {
     if (action === 'config') {
-      if (!enabled) return res.json({ enabled: false });
+      if (!enabled) return res.json({ enabled: false, walletConnectProjectId });
       const { decimals } = await getMint(conn, mint);
       return res.json({
         enabled: true, chain, cluster, publicRpcs, swapEnabled, walletConnectProjectId,
