@@ -21,6 +21,8 @@ const tp = (chain) => `tpdapp://open?params=${encodeURIComponent(JSON.stringify(
 const groups = [
  ['TokenPocket', 'documented link, Solana support unconfirmed', [
    ['TP1', tp('Solana')], ['TP2', tp('')], ['TP3', tp('Ethereum')]]],
+ ['Zerion', 'GUESSES, only zerion://wc is documented (it needs a connection code)', [
+   ['ZR1', `zerion://browser?url=${U}`], ['ZR2', `zerion://browse?url=${U}`], ['ZR3', `zerion://dapp?url=${U}`]]],
  ['Binance (Web3 Wallet)', 'GUESSES, nothing documented', [
    ['BN1', `bnc://app.binance.com/cedefi/dapp?url=${U}`], ['BN2', `bnc://app.binance.com/cedefi/dapp?dappUrl=${U}`]]],
  ['Bybit', 'GUESSES, nothing documented', [
