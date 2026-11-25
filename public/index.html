@@ -108,6 +108,11 @@ const WALLETS = [
   // Nightly documents a link that opens a web page inside its own mobile browser.
   { label: 'Nightly', match: /nightly/i, legacy: () => window.nightly?.solana,
     link: (u) => `https://nightly.app/v1?network=solana&cluster=${config.cluster === 'devnet' ? 'devnet' : 'mainnet'}&url=${enc(u)}` },
+  // TokenPocket and Zerion: both links tested on iPhone (open the page inside the wallet's own browser).
+  { label: 'TokenPocket', match: /token\s?pocket/i, legacy: () => window.tokenpocket?.solana,
+    link: (u) => `tpdapp://open?params=${enc(JSON.stringify({ url: u, chain: 'Solana', source: 'token-sale' }))}` },
+  { label: 'Zerion', match: /zerion/i, legacy: () => window.zerion?.solana,
+    link: (u) => `zerion://browser?url=${enc(u)}` },
   // Jupiter Mobile opens the page in its own browser through jupiter://browse/<page> (tested on iPhone).
   { label: 'Jupiter', match: /jupiter/i,    legacy: () => null, link: (u) => `jupiter://browse/${enc(u)}` },
 ];
