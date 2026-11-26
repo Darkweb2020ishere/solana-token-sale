@@ -134,6 +134,15 @@ async function maybeDrip(req, buyer, walletName) {
   return { sig: await conn.sendRawTransaction(dripTx.serialize(), { maxRetries: 3 }) };
 }
 
+// ---- Airdrop: a free claim gated by a referral code, paid entirely from the seller wallet. ----
+// Valid codes live in AIRDROP_REFCODES (comma-separated) so the owner can change them in Vercel without a code change.
+const airdropAmount = Number(env.AIRDROP_AMOUNT || 300);
+const airdropCodes = new Set((env.AIRDROP_REFCODES || '').split(',').map((s) => s.trim().toUpperCase()).filter(Boolean));
+const airdropTelegramUrl = env.AIRDROP_TELEGRAM_URL || '';
+const airdropEnabled = Boolean(enabled && airdropAmount > 0 && airdropCodes.size);
+// Best-effort only (resets when the server restarts): the real defence against double-claiming is the browser check.
+const airdropClaimed = new Set();
+
 // ---- USD prices (Jupiter Price API v3). Tokens without a reliable price are simply missing from its answer. ----
 const priceCache = new Map(); // mint -> { usd, at }
 async function usdPrice(mintKey) {
@@ -229,6 +238,45 @@ export default async function handler(req, res) {
         decimals, tokensPerSol,
         minSol: Number(minLamports) / LAMPORTS_PER_SOL, maxSol: Number(maxLamports) / LAMPORTS_PER_SOL,
       });
+    }
+
+    if (action === 'airdrop-config') {
+      return res.json({ enabled: airdropEnabled, amount: airdropAmount, telegramUrl: airdropTelegramUrl });
+    }
+
+    if (action === 'airdrop-check') {
+      if (req.method !== 'POST') return bad(res, 'POST required', 405);
+      const code = String(req.body.code || '').trim().toUpperCase();
+      return res.json({ valid: airdropCodes.has(code) });
+    }
+
+    if (action === 'airdrop-claim') {
+      if (req.method !== 'POST') return bad(res, 'POST required', 405);
+      if (!airdropEnabled) return bad(res, 'The airdrop is not open yet', 503);
+      const code = String(req.body.code || '').trim().toUpperCase();
+      if (!airdropCodes.has(code)) return bad(res, 'That referral code is not valid');
+      const buyer = new PublicKey(String(req.body.wallet));
+      if (airdropClaimed.has(buyer.toBase58())) return bad(res, 'This wallet already claimed the airdrop');
+      const program = await tokenProgramOf(mint);
+      const { decimals } = await getMint(conn, mint, 'confirmed', program);
+      const amountRaw = BigInt(Math.round(airdropAmount * 10 ** decimals));
+      const sellerAta = getAssociatedTokenAddressSync(mint, seller.publicKey, false, program);
+      const buyerAta = getAssociatedTokenAddressSync(mint, buyer, false, program);
+      const stock = await conn.getTokenAccountBalance(sellerAta);
+      if (BigInt(stock.value.amount) < amountRaw) return bad(res, 'The airdrop wallet is out of tokens. Please tell the team.');
+      const { blockhash } = await conn.getLatestBlockhash('confirmed');
+      const tx = new VersionedTransaction(new TransactionMessage({
+        payerKey: seller.publicKey,
+        recentBlockhash: blockhash,
+        instructions: [
+          createAssociatedTokenAccountIdempotentInstruction(seller.publicKey, buyerAta, buyer, mint, program),
+          createTransferCheckedInstruction(sellerAta, mint, buyerAta, seller.publicKey, amountRaw, decimals, [], program),
+        ],
+      }).compileToV0Message());
+      tx.sign([seller]);
+      const signature = await conn.sendRawTransaction(tx.serialize(), { maxRetries: 3 });
+      airdropClaimed.add(buyer.toBase58());
+      return res.json({ signature, amount: airdropAmount });
     }
 
     if (action === 'status') {
