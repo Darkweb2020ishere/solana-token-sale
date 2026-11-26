@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>FLOAT Airdrop</title>
+<style>
+  :root { color-scheme: dark; --bg1:#060a1f; --bg2:#0d1a4a; --fg:#eef1fb; --muted:#9db0d6; --card:#0f1940cc; --line:#2a3a74; --accent:#ffffff; --glow:#4e7bff; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin:0; color:var(--fg); font:16px/1.5 -apple-system, system-ui, sans-serif;
+    background: radial-gradient(1200px 600px at 50% -10%, #1c3ad6 0%, transparent 60%), linear-gradient(180deg, var(--bg1), var(--bg2));
+    min-height:100vh;
+  }
+  main { max-width:540px; margin:0 auto; padding:18px 16px calc(56px + env(safe-area-inset-bottom)); }
+  header { display:flex; align-items:center; gap:10px; padding:6px 2px 18px; }
+  header img { width:30px; height:30px; border-radius:8px; }
+  header .brand { font-weight:800; letter-spacing:.04em; font-size:1.05rem; }
+  header a.x { margin-left:auto; width:34px; height:34px; border-radius:50%; border:1px solid var(--line); display:flex; align-items:center; justify-content:center; color:var(--fg); text-decoration:none; font-weight:700; }
+  .hero { text-align:center; padding:10px 6px 26px; }
+  .hero img { width:84px; height:84px; border-radius:20px; box-shadow:0 0 60px 4px var(--glow); margin-bottom:14px; }
+  .hero h1 { font-size:1.7rem; margin:0 0 8px; font-weight:800; }
+  .hero p { color:var(--muted); margin:0; font-size:.98rem; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:18px; padding:18px; margin-bottom:14px; backdrop-filter:blur(6px); }
+  .card h2 { font-size:1.02rem; margin:0 0 12px; }
+  .muted { color:var(--muted); font-size:.92rem; }
+  input { width:100%; padding:15px; border-radius:12px; border:1px solid var(--line); background:#0a1335; color:var(--fg); font-size:16px; margin-bottom:10px; }
+  input::placeholder { color:#5b6ca3; }
+  button { font:inherit; }
+  button.pill { width:100%; background:var(--accent); color:#0a1335; border:0; border-radius:999px; padding:15px; font-weight:700; }
+  button.pill.outline { background:transparent; color:var(--fg); border:1px solid var(--line); }
+  button:disabled { opacity:.45; }
+  .task { display:flex; align-items:center; gap:12px; background:#0a1335; border:1px solid var(--line); border-radius:14px; padding:14px; margin-bottom:10px; text-decoration:none; color:var(--fg); }
+  .task .num { width:26px; height:26px; border-radius:50%; background:#1b2a63; display:flex; align-items:center; justify-content:center; font-size:.85rem; font-weight:700; flex:none; }
+  .task.done .num { background:#1d7a4c; }
+  .task .t { flex:1; }
+  .task .t b { display:block; }
+  .task .t small { color:var(--muted); }
+  .task .go { color:var(--muted); font-size:1.1rem; }
+  .task.disabled { opacity:.5; pointer-events:none; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .wallet { background:#0a1335; border:1px solid var(--line); border-radius:14px; padding:16px 12px; min-height:60px; color:var(--fg); text-align:left; font:inherit; }
+  .wallet small { display:block; color:var(--muted); font-size:.78rem; }
+  #status { margin-top:12px; min-height:1.4em; word-break:break-word; font-size:.92rem; } #status.err { color:#ff8585; }
+  #err { color:#ff8585; font-size:.9rem; min-height:1.3em; }
+  .done-badge { text-align:center; padding:30px 10px; }
+  .done-badge .tick { width:64px; height:64px; border-radius:50%; background:#1d7a4c; display:flex; align-items:center; justify-content:center; font-size:2rem; margin:0 auto 14px; }
+  [hidden] { display:none !important; }
+  a { color:#9ec1ff; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "@wallet-standard/app": "https://esm.sh/@wallet-standard/app@1"
+} }
+</script>
+</head>
+<body>
+<main>
+  <header>
+    <img src="/assets/float-logo.jpg" alt="" />
+    <div class="brand">FLOAT</div>
+    <a class="x" href="https://x.com/floatdotxyz" target="_blank" rel="noopener">𝕏</a>
+  </header>
+
+  <div class="hero">
+    <img src="/assets/float-logo.jpg" alt="FLOAT" />
+    <h1 id="hero-title">Claim your $FLOAT airdrop</h1>
+    <p id="hero-sub" class="muted">Loading…</p>
+  </div>
+
+  <!-- Step 1: referral code -->
+  <section id="gate" class="card">
+    <h2>Enter your referral code</h2>
+    <p class="muted">You need a valid code from an affiliate to access this airdrop.</p>
+    <input id="code" placeholder="e.g. FLOAT-AB12CD" autocapitalize="characters" autocorrect="off" />
+    <button id="unlock" class="pill">Unlock</button>
+    <p id="err"></p>
+  </section>
+
+  <!-- Step 2: tasks -->
+  <section id="tasks" class="card" hidden>
+    <h2>Complete these 3 tasks</h2>
+    <p class="muted">Tap each one. It opens in a new tab and marks itself done when you return.</p>
+    <a id="task-x" class="task" href="https://x.com/floatdotxyz" target="_blank" rel="noopener">
+      <div class="num">1</div>
+      <div class="t"><b>Follow @floatdotxyz on X</b><small>Opens X</small></div>
+      <div class="go">↗</div>
+    </a>
+    <a id="task-repost" class="task" href="https://x.com/floatdotxyz/status/2115563091723202969" target="_blank" rel="noopener">
+      <div class="num">2</div>
+      <div class="t"><b>Repost our pinned post</b><small>Opens the post on X</small></div>
+      <div class="go">↗</div>
+    </a>
+    <a id="task-tg" class="task" href="#" target="_blank" rel="noopener">
+      <div class="num">3</div>
+      <div class="t"><b>Join our Telegram</b><small id="tg-note">Opens Telegram</small></div>
+      <div class="go">↗</div>
+    </a>
+  </section>
+
+  <!-- Step 3: connect & claim -->
+  <section id="claim" class="card" hidden>
+    <h2>Connect your wallet to claim</h2>
+    <p id="amount-note" class="muted">You'll receive your airdrop here.</p>
+    <div id="wallet-list" class="grid"></div>
+    <p id="hint" class="muted"></p>
+  </section>
+
+  <!-- Already connected: show claim button -->
+  <section id="claim-ready" class="card" hidden>
+    <p class="muted">Connected as <span id="who"></span></p>
+    <button id="do-claim" class="pill">Claim my airdrop</button>
+    <button id="disconnect" class="pill outline">Use a different wallet</button>
+  </section>
+
+  <!-- Done -->
+  <section id="done" class="card" hidden>
+    <div class="done-badge">
+      <div class="tick">✓</div>
+      <h2>Airdrop sent!</h2>
+      <p class="muted" id="done-note"></p>
+    </div>
+  </section>
+
+  <p id="status" role="status"></p>
+</main>
+
+<script type="module">
+import { getWallets } from '@wallet-standard/app';
+
+const $ = (id) => document.getElementById(id);
+const enc = encodeURIComponent;
+const pageUrl = location.origin + location.pathname;
+const setStatus = (t, err = false) => { $('status').textContent = t; $('status').classList.toggle('err', err); };
+
+const LS_CODE = 'float_airdrop_code';
+const LS_TASKS = 'float_airdrop_tasks'; // comma list of done task ids
+const LS_CLAIMED = 'float_airdrop_claimed'; // signature, once sent — blocks re-claiming on this browser
+
+let config = { enabled: false };
+let adapter = null;
+
+// ---- Reused from the sale page: deep links that open this page inside each wallet's own in-app browser. ----
+const WALLETS = [
+  { label: 'Phantom',  match: /phantom/i,   legacy: () => window.phantom?.solana,
+    link: (u) => `https://phantom.com/ul/browse/${enc(u)}?ref=${enc(location.origin)}` },
+  { label: 'Solflare', match: /solflare/i,  legacy: () => window.solflare,
+    link: (u) => `https://solflare.com/ul/v1/browse/${enc(u)}?ref=${enc(location.origin)}` },
+  { label: 'Backpack', match: /backpack/i,  legacy: () => window.backpack,
+    link: (u) => `https://backpack.app/ul/v1/browse/${enc(u)}?ref=${enc(location.origin)}` },
+  { label: 'MetaMask', match: /metamask/i,  legacy: () => null,
+    link: (u) => `https://link.metamask.io/dapp/${u.replace(/^https?:\/\//, '')}` },
+  { label: 'Trust Wallet', match: /trust/i, legacy: () => window.trustwallet?.solana,
+    link: (u) => `https://link.trustwallet.com/open_url?coin_id=501&url=${enc(u)}` },
+  { label: 'Coinbase Wallet', match: /coinbase/i, legacy: () => window.coinbaseSolana,
+    link: (u) => `https://go.cb-w.com/dapp?cb_url=${enc(u)}` },
+  { label: 'OKX Wallet', match: /okx/i, legacy: () => window.okxwallet?.solana,
+    link: (u) => `https://web3.okx.com/download?deeplink=${enc('okx://wallet/dapp/url?dappUrl=' + enc(u))}` },
+  { label: 'Bitget Wallet', match: /bitget|bitkeep/i, legacy: () => window.bitkeep?.solana || window.bitget?.solana,
+    link: (u) => `https://bkcode.vip?action=dapp&url=${u}` },
+  { label: 'Nightly', match: /nightly/i, legacy: () => window.nightly?.solana,
+    link: (u) => `https://nightly.app/v1?network=solana&cluster=mainnet&url=${enc(u)}` },
+  { label: 'TokenPocket', match: /token\s?pocket/i, legacy: () => window.tokenpocket?.solana,
+    link: (u) => `tpdapp://open?params=${enc(JSON.stringify({ url: u, chain: 'Solana', source: 'airdrop' }))}` },
+  { label: 'Zerion', match: /zerion/i, legacy: () => window.zerion?.solana,
+    link: (u) => `zerion://browser?url=${enc(u)}` },
+  { label: 'Jupiter', match: /jupiter/i, legacy: () => null, link: (u) => `jupiter://browse/${enc(u)}` },
+];
+
+function standardAdapter(w) {
+  let account;
+  return {
+    name: w.name,
+    async connect() {
+      const { accounts } = await w.features['standard:connect'].connect();
+      account = accounts.find((a) => a.chains?.some((c) => c.startsWith('solana:'))) ?? accounts[0];
+      if (!account) throw new Error('The wallet did not return a Solana account');
+      return account.address;
+    },
+    async disconnect() { try { await w.features['standard:disconnect']?.disconnect(); } catch {} },
+  };
+}
+function legacyAdapter(name, p) {
+  return {
+    name,
+    async connect() { const r = await p.connect(); return (r?.publicKey || p.publicKey).toString(); },
+    async disconnect() { try { await p.disconnect?.(); } catch {} },
+  };
+}
+function detect(def) {
+  const std = getWallets().get().find((w) => def.match.test(w.name) && 'standard:connect' in w.features);
+  if (std) return standardAdapter(std);
+  const p = def.legacy();
+  if (p?.connect) return legacyAdapter(def.label, p);
+  return null;
+}
+function renderWallets() {
+  const list = $('wallet-list');
+  list.replaceChildren();
+  let anyDetected = false;
+  for (const def of WALLETS) {
+    const found = detect(def);
+    anyDetected ||= Boolean(found);
+    const b = document.createElement('button');
+    b.className = 'wallet';
+    b.textContent = def.label;
+    const small = document.createElement('small');
+    small.textContent = found ? 'Tap to connect' : def.link ? 'Tap to open in app' : 'Copy link, open in app';
+    b.append(small);
+    b.onclick = () => (found ? connect(found) : openInApp(def));
+    list.append(b);
+  }
+  $('hint').textContent = anyDetected ? '' : 'Tap your wallet. This page will reopen inside the wallet app, then connect there.';
+}
+async function openInApp(def) {
+  if (def.link) { location.href = def.link(pageUrl); return; }
+  try { await navigator.clipboard.writeText(pageUrl); } catch {}
+  $('hint').textContent = `Link copied. Now open ${def.label}, open its browser and paste this link.`;
+}
+async function connect(a) {
+  try {
+    setStatus('Waiting for wallet approval…');
+    const address = await a.connect();
+    adapter = a;
+    $('who').textContent = `${a.name} · ${address.slice(0, 4)}…${address.slice(-4)}`;
+    $('who').dataset.address = address;
+    $('claim').hidden = true;
+    $('claim-ready').hidden = false;
+    setStatus('');
+  } catch (e) { setStatus(e.message || 'Connection cancelled', true); }
+}
+$('disconnect').onclick = async () => {
+  await adapter?.disconnect();
+  adapter = null;
+  $('claim-ready').hidden = true;
+  $('claim').hidden = false;
+  setStatus('');
+};
+
+// ---- Step 1: referral code ----
+function showStep(step) {
+  $('gate').hidden = step !== 'gate';
+  $('tasks').hidden = step !== 'tasks' && step !== 'claim' && step !== 'claim-ready';
+  $('claim').hidden = step !== 'claim';
+  $('claim-ready').hidden = step !== 'claim-ready';
+}
+
+async function tryUnlock(code) {
+  $('err').textContent = '';
+  if (!code) { $('err').textContent = 'Enter a code first.'; return; }
+  $('unlock').disabled = true;
+  try {
+    const r = await fetch('/api/airdrop-check', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code }) });
+    const data = await r.json();
+    if (!data.valid) { $('err').textContent = 'That code is not valid. Check it and try again.'; return; }
+    localStorage.setItem(LS_CODE, code.toUpperCase());
+    enterTasks();
+  } catch { $('err').textContent = 'Could not check that code. Check your connection and try again.'; }
+  finally { $('unlock').disabled = false; }
+}
+$('unlock').onclick = () => tryUnlock($('code').value.trim());
+$('code').addEventListener('keydown', (e) => { if (e.key === 'Enter') tryUnlock($('code').value.trim()); });
+
+function doneTasks() { return new Set((localStorage.getItem(LS_TASKS) || '').split(',').filter(Boolean)); }
+function markTaskDone(id) {
+  const d = doneTasks(); d.add(id);
+  localStorage.setItem(LS_TASKS, [...d].join(','));
+  renderTasks();
+}
+function renderTasks() {
+  const d = doneTasks();
+  for (const id of ['x', 'repost', 'tg']) {
+    const el = $('task-' + id);
+    const isTelegram = id === 'tg';
+    const required = !isTelegram || Boolean(config.telegramUrl);
+    if (isTelegram && !required) {
+      el.classList.add('disabled');
+      el.querySelector('small').textContent = 'Coming soon';
+    } else {
+      el.classList.toggle('done', d.has(id));
+    }
+  }
+  const required = ['x', 'repost', ...(config.telegramUrl ? ['tg'] : [])];
+  const allDone = required.every((id) => d.has(id));
+  if (allDone) { showStep('claim'); renderWallets(); }
+}
+for (const id of ['x', 'repost', 'tg']) {
+  $('task-' + id).addEventListener('click', (e) => {
+    if ($('task-' + id).classList.contains('disabled')) { e.preventDefault(); return; }
+    markTaskDone(id);
+  });
+}
+
+function enterTasks() {
+  showStep('tasks');
+  renderTasks();
+}
+
+async function doClaim() {
+  const address = $('who').dataset.address;
+  const code = localStorage.getItem(LS_CODE);
+  $('do-claim').disabled = true;
+  try {
+    setStatus('Sending your airdrop…');
+    const r = await fetch('/api/airdrop-claim', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code, wallet: address }) });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Could not send the airdrop');
+    localStorage.setItem(LS_CLAIMED, data.signature);
+    $('done-note').textContent = `${data.amount} $FLOAT is on its way to your wallet.`;
+    $('claim-ready').hidden = true;
+    $('done').hidden = false;
+    setStatus('');
+  } catch (e) { setStatus(e.message || 'Could not send the airdrop', true); }
+  finally { $('do-claim').disabled = false; }
+}
+$('do-claim').onclick = doClaim;
+
+async function init() {
+  try {
+    config = await (await fetch('/api/airdrop-config')).json();
+  } catch { config = { enabled: false }; }
+  if (!config.enabled) {
+    $('hero-sub').textContent = 'The airdrop is not open yet. Check back soon.';
+    $('gate').hidden = true;
+    return;
+  }
+  $('hero-sub').textContent = `${config.amount} $FLOAT, free, for completing 3 quick tasks.`;
+  $('amount-note').textContent = `You'll receive ${config.amount} $FLOAT in this wallet.`;
+  if (config.telegramUrl) {
+    $('task-tg').href = config.telegramUrl;
+    $('tg-note').textContent = 'Opens Telegram';
+  }
+  const alreadyClaimed = localStorage.getItem(LS_CLAIMED);
+  if (alreadyClaimed) {
+    showStep('gate'); $('gate').hidden = true; $('tasks').hidden = true;
+    $('done-note').textContent = `Already claimed from this browser. (tx ${alreadyClaimed.slice(0, 8)}…)`;
+    $('done').hidden = false;
+    return;
+  }
+  const savedCode = localStorage.getItem(LS_CODE);
+  if (savedCode) { $('code').value = savedCode; enterTasks(); }
+}
+init();
+</script>
+</body>
+</html>
