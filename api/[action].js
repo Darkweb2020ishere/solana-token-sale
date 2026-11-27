@@ -255,7 +255,9 @@ export default async function handler(req, res) {
       if (!airdropEnabled) return bad(res, 'The airdrop is not open yet', 503);
       const code = String(req.body.code || '').trim().toUpperCase();
       if (!airdropCodes.has(code)) return bad(res, 'That referral code is not valid');
-      const buyer = new PublicKey(String(req.body.wallet));
+      let buyer;
+      try { buyer = new PublicKey(String(req.body.wallet || '').trim()); }
+      catch { return bad(res, 'That does not look like a valid Solana wallet address. Please check it and try again.'); }
       if (airdropClaimed.has(buyer.toBase58())) return bad(res, 'This wallet already claimed the airdrop');
       const program = await tokenProgramOf(mint);
       const { decimals } = await getMint(conn, mint, 'confirmed', program);
