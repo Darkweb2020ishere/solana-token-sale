@@ -13,10 +13,13 @@
     min-height:100vh;
   }
   main { max-width:540px; margin:0 auto; padding:18px 16px calc(56px + env(safe-area-inset-bottom)); }
-  header { display:flex; align-items:center; gap:10px; padding:6px 2px 18px; }
+  header { display:flex; align-items:center; gap:10px; padding:6px 2px 18px; flex-wrap:wrap; }
   header img { width:30px; height:30px; border-radius:8px; }
   header .brand { font-weight:800; letter-spacing:.04em; font-size:1.05rem; }
-  header a.x { margin-left:auto; width:34px; height:34px; border-radius:50%; border:1px solid var(--line); display:flex; align-items:center; justify-content:center; color:var(--fg); text-decoration:none; font-weight:700; }
+  nav.menu { display:flex; align-items:center; gap:16px; margin-left:auto; }
+  nav.menu a { color:var(--muted); text-decoration:none; font-weight:700; font-size:.9rem; padding-bottom:3px; border-bottom:2px solid transparent; }
+  nav.menu a.active { color:var(--fg); border-color:var(--accent); }
+  header a.x { width:34px; height:34px; border-radius:50%; border:1px solid var(--line); display:flex; align-items:center; justify-content:center; color:var(--fg); text-decoration:none; font-weight:700; flex:none; }
   .hero { text-align:center; padding:10px 6px 26px; }
   .hero img { width:84px; height:84px; border-radius:20px; box-shadow:0 0 60px 4px var(--glow); margin-bottom:14px; }
   .hero h1 { font-size:1.7rem; margin:0 0 8px; font-weight:800; }
@@ -29,6 +32,7 @@
   button { font:inherit; }
   button.pill { width:100%; background:var(--accent); color:#0a1335; border:0; border-radius:999px; padding:15px; font-weight:700; }
   button.pill.outline { background:transparent; color:var(--fg); border:1px solid var(--line); }
+  button.pill.small { padding:11px; font-size:.9rem; }
   button:disabled { opacity:.45; }
   .task { display:flex; align-items:center; gap:12px; background:#0a1335; border:1px solid var(--line); border-radius:14px; padding:14px; margin-bottom:10px; text-decoration:none; color:var(--fg); }
   .task .num { width:26px; height:26px; border-radius:50%; background:#1b2a63; display:flex; align-items:center; justify-content:center; font-size:.85rem; font-weight:700; flex:none; }
@@ -38,13 +42,23 @@
   .task .t small { color:var(--muted); }
   .task .go { color:var(--muted); font-size:1.1rem; }
   .task.disabled { opacity:.5; pointer-events:none; }
-  .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-  .wallet { background:#0a1335; border:1px solid var(--line); border-radius:14px; padding:16px 12px; min-height:60px; color:var(--fg); text-align:left; font:inherit; }
-  .wallet small { display:block; color:var(--muted); font-size:.78rem; }
+  .skip-link { display:block; text-align:center; margin-top:4px; color:var(--muted); font-size:.85rem; text-decoration:underline; background:none; border:0; padding:6px; width:100%; }
+  .grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+  .wallet-tile { display:flex; flex-direction:column; align-items:center; gap:8px; background:#0a1335; border:1px solid var(--line); border-radius:14px; padding:14px 6px 12px; color:var(--fg); font:inherit; text-align:center; }
+  .wallet-tile .badge { width:42px; height:42px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:.95rem; color:#fff; letter-spacing:-.02em; }
+  .wallet-tile span { font-size:.74rem; line-height:1.2; }
   #status { margin-top:12px; min-height:1.4em; word-break:break-word; font-size:.92rem; } #status.err { color:#ff8585; }
   #err { color:#ff8585; font-size:.9rem; min-height:1.3em; }
   .done-badge { text-align:center; padding:30px 10px; }
   .done-badge .tick { width:64px; height:64px; border-radius:50%; background:#1d7a4c; display:flex; align-items:center; justify-content:center; font-size:2rem; margin:0 auto 14px; }
+  details.guide { background:#0a1335; border:1px solid var(--line); border-radius:14px; padding:14px 16px; margin-top:14px; }
+  details.guide summary { cursor:pointer; font-weight:700; list-style:none; display:flex; align-items:center; justify-content:space-between; }
+  details.guide summary::-webkit-details-marker { display:none; }
+  details.guide summary .arrow { transition:transform .15s; color:var(--muted); }
+  details.guide[open] summary .arrow { transform:rotate(90deg); }
+  details.guide ol { margin:12px 0 4px; padding-left:20px; color:var(--muted); font-size:.92rem; }
+  details.guide li { margin-bottom:8px; }
+  details.guide .warn { margin-top:10px; padding:10px 12px; background:#2a1030; border:1px solid #5a2050; border-radius:10px; color:#ffc1e6; font-size:.86rem; }
   [hidden] { display:none !important; }
   a { color:#9ec1ff; }
 </style>
@@ -59,6 +73,10 @@
   <header>
     <img src="/assets/float-logo.jpg" alt="" />
     <div class="brand">FLOAT</div>
+    <nav class="menu">
+      <a href="https://www.floatlaunch.xyz">Home</a>
+      <a href="/airdrop.html" class="active" aria-current="page">Airdrop</a>
+    </nav>
     <a class="x" href="https://x.com/floatdotxyz" target="_blank" rel="noopener">𝕏</a>
   </header>
 
@@ -96,21 +114,17 @@
       <div class="t"><b>Join our Telegram</b><small id="tg-note">Opens Telegram</small></div>
       <div class="go">↗</div>
     </a>
+    <button id="skip-tasks" class="skip-link" type="button">Already did this on another browser or device? Tap to continue →</button>
   </section>
 
-  <!-- Step 3: connect & claim -->
+  <!-- Step 3: enter address + claim -->
   <section id="claim" class="card" hidden>
-    <h2>Connect your wallet to claim</h2>
-    <p id="amount-note" class="muted">You'll receive your airdrop here.</p>
-    <div id="wallet-list" class="grid"></div>
-    <p id="hint" class="muted"></p>
-  </section>
-
-  <!-- Already connected: show claim button -->
-  <section id="claim-ready" class="card" hidden>
-    <p class="muted">Connected as <span id="who"></span></p>
-    <button id="do-claim" class="pill">Claim my airdrop</button>
-    <button id="disconnect" class="pill outline">Use a different wallet</button>
+    <h2>Claim your airdrop</h2>
+    <p id="amount-note" class="muted">Enter the Solana wallet address you want your tokens sent to.</p>
+    <input id="addr" placeholder="Your Solana wallet address" autocapitalize="off" autocorrect="off" spellcheck="false" />
+    <button id="use-connected" class="pill outline small" hidden style="margin-bottom:10px;">Use my connected wallet</button>
+    <button id="claim-btn" class="pill">Claim Airdrop</button>
+    <p id="addr-err" style="color:#ff8585; font-size:.9rem; min-height:1.3em; margin-top:8px;"></p>
   </section>
 
   <!-- Done -->
@@ -120,6 +134,20 @@
       <h2>Airdrop sent!</h2>
       <p class="muted" id="done-note"></p>
     </div>
+    <h2 style="margin-top:18px;">Open your wallet to view it</h2>
+    <div id="wallet-list" class="grid"></div>
+
+    <details class="guide">
+      <summary>Can't find your wallet here? <span class="arrow">›</span></summary>
+      <p class="muted" style="margin-top:10px;">No problem — you can still receive your airdrop. Just import your existing wallet into one of the apps above using its recovery phrase or private key:</p>
+      <ol>
+        <li>Install one of the supported wallet apps above from the App Store or Google Play (Phantom is a good default).</li>
+        <li>Open it and choose <b>"I already have a wallet"</b> (sometimes called "Import wallet" or "Restore wallet").</li>
+        <li>Enter your existing 12 or 24-word recovery phrase (or private key, if that's what your wallet gave you) exactly as it was given to you.</li>
+        <li>Your same address and your $FLOAT tokens will appear automatically — nothing is moved or re-sent.</li>
+      </ol>
+      <p class="warn">Only ever type your recovery phrase or private key into the real wallet app you just installed yourself. Never share it in a chat, website, or with anyone claiming to help you — including people pretending to be FLOAT support.</p>
+    </details>
   </section>
 
   <p id="status" role="status"></p>
@@ -138,34 +166,80 @@ const LS_TASKS = 'float_airdrop_tasks'; // comma list of done task ids
 const LS_CLAIMED = 'float_airdrop_claimed'; // signature, once sent — blocks re-claiming on this browser
 
 let config = { enabled: false };
-let adapter = null;
 
-// ---- Reused from the sale page: deep links that open this page inside each wallet's own in-app browser. ----
+// ---- Supported wallets, roughly by popularity on Solana. Jupiter is never last, per house rule. ----
+// Colors/initials are our own simple badges, not the wallets' official logos (we can't fetch outside
+// image assets here) — easy to swap in real logo files later by replacing the badge markup.
 const WALLETS = [
-  { label: 'Phantom',  match: /phantom/i,   legacy: () => window.phantom?.solana,
+  { label: 'Phantom', color: '#ab9ff2', mono: 'PH', match: /phantom/i, legacy: () => window.phantom?.solana,
     link: (u) => `https://phantom.com/ul/browse/${enc(u)}?ref=${enc(location.origin)}` },
-  { label: 'Solflare', match: /solflare/i,  legacy: () => window.solflare,
+  { label: 'Solflare', color: '#fc9a3d', mono: 'SF', match: /solflare/i, legacy: () => window.solflare,
     link: (u) => `https://solflare.com/ul/v1/browse/${enc(u)}?ref=${enc(location.origin)}` },
-  { label: 'Backpack', match: /backpack/i,  legacy: () => window.backpack,
+  { label: 'Backpack', color: '#e8393a', mono: 'BP', match: /backpack/i, legacy: () => window.backpack,
     link: (u) => `https://backpack.app/ul/v1/browse/${enc(u)}?ref=${enc(location.origin)}` },
-  { label: 'MetaMask', match: /metamask/i,  legacy: () => null,
-    link: (u) => `https://link.metamask.io/dapp/${u.replace(/^https?:\/\//, '')}` },
-  { label: 'Trust Wallet', match: /trust/i, legacy: () => window.trustwallet?.solana,
-    link: (u) => `https://link.trustwallet.com/open_url?coin_id=501&url=${enc(u)}` },
-  { label: 'Coinbase Wallet', match: /coinbase/i, legacy: () => window.coinbaseSolana,
-    link: (u) => `https://go.cb-w.com/dapp?cb_url=${enc(u)}` },
-  { label: 'OKX Wallet', match: /okx/i, legacy: () => window.okxwallet?.solana,
+  { label: 'Jupiter', color: '#f3ba2f', mono: 'JUP', match: /jupiter/i, legacy: () => null,
+    link: (u) => `jupiter://browse/${enc(u)}` },
+  { label: 'OKX Wallet', color: '#1a1a1e', mono: 'OKX', match: /okx/i, legacy: () => window.okxwallet?.solana,
     link: (u) => `https://web3.okx.com/download?deeplink=${enc('okx://wallet/dapp/url?dappUrl=' + enc(u))}` },
-  { label: 'Bitget Wallet', match: /bitget|bitkeep/i, legacy: () => window.bitkeep?.solana || window.bitget?.solana,
+  { label: 'Bitget Wallet', color: '#1da2ff', mono: 'BG', match: /bitget|bitkeep/i, legacy: () => window.bitkeep?.solana || window.bitget?.solana,
     link: (u) => `https://bkcode.vip?action=dapp&url=${u}` },
-  { label: 'Nightly', match: /nightly/i, legacy: () => window.nightly?.solana,
+  { label: 'Trust Wallet', color: '#3375bb', mono: 'TW', match: /trust/i, legacy: () => window.trustwallet?.solana,
+    link: (u) => `https://link.trustwallet.com/open_url?coin_id=501&url=${enc(u)}` },
+  { label: 'Coinbase Wallet', color: '#0052ff', mono: 'CB', match: /coinbase/i, legacy: () => window.coinbaseSolana,
+    link: (u) => `https://go.cb-w.com/dapp?cb_url=${enc(u)}` },
+  { label: 'Nightly', color: '#6c4fe0', mono: 'NT', match: /nightly/i, legacy: () => window.nightly?.solana,
     link: (u) => `https://nightly.app/v1?network=solana&cluster=mainnet&url=${enc(u)}` },
-  { label: 'TokenPocket', match: /token\s?pocket/i, legacy: () => window.tokenpocket?.solana,
+  { label: 'TokenPocket', color: '#2980fe', mono: 'TP', match: /token\s?pocket/i, legacy: () => window.tokenpocket?.solana,
     link: (u) => `tpdapp://open?params=${enc(JSON.stringify({ url: u, chain: 'Solana', source: 'airdrop' }))}` },
-  { label: 'Zerion', match: /zerion/i, legacy: () => window.zerion?.solana,
+  { label: 'Zerion', color: '#2962ef', mono: 'ZN', match: /zerion/i, legacy: () => window.zerion?.solana,
     link: (u) => `zerion://browser?url=${enc(u)}` },
-  { label: 'Jupiter', match: /jupiter/i, legacy: () => null, link: (u) => `jupiter://browse/${enc(u)}` },
+  { label: 'MetaMask', color: '#f6851b', mono: 'MM', match: /metamask/i, legacy: () => null,
+    link: (u) => `https://link.metamask.io/dapp/${u.replace(/^https?:\/\//, '')}` },
 ];
+
+// ---- Cross-browser-context state passing -----------------------------------------------------
+// There's no database here (by design), so returning "already done" state across a totally separate
+// browser context (e.g. Safari -> a wallet app's own in-app browser) can only travel one of two ways:
+//  1. Through the URL, when WE are the one generating the link that opens that other browser (the
+//     "open your wallet" buttons below) — we tack the current state onto the query string so the page
+//     reads it back the instant it reopens there.
+//  2. Through an honest manual "I already did this" shortcut, for the case where someone opens the
+//     page fresh inside a wallet browser some other way (typing/searching the URL themselves) — we
+//     can't detect that automatically without an account system, so we just offer a skip.
+function currentState() {
+  const tasks = doneTasks();
+  const required = ['x', 'repost', ...(config.telegramUrl ? ['tg'] : [])];
+  const tasksDone = required.length > 0 && required.every((id) => tasks.has(id));
+  const code = localStorage.getItem(LS_CODE) || '';
+  const claimed = localStorage.getItem(LS_CLAIMED) || '';
+  return { code, tasksDone, claimed };
+}
+function withState(url) {
+  const s = currentState();
+  const u = new URL(url);
+  if (s.code) u.searchParams.set('code', s.code);
+  if (s.tasksDone) u.searchParams.set('tasks', '1');
+  if (s.claimed) { u.searchParams.set('claimed', '1'); u.searchParams.set('sig', s.claimed); }
+  return u.toString();
+}
+function applyUrlState() {
+  const qp = new URLSearchParams(location.search);
+  let changed = false;
+  const code = qp.get('code');
+  if (code) { localStorage.setItem(LS_CODE, code.toUpperCase()); changed = true; }
+  if (qp.get('tasks') === '1') {
+    const required = ['x', 'repost', ...(config.telegramUrl ? ['tg'] : [])];
+    const d = doneTasks();
+    required.forEach((id) => d.add(id));
+    localStorage.setItem(LS_TASKS, [...d].join(','));
+    changed = true;
+  }
+  if (qp.get('claimed') === '1') {
+    localStorage.setItem(LS_CLAIMED, qp.get('sig') || 'claimed');
+    changed = true;
+  }
+  if (changed) history.replaceState(null, '', location.pathname);
+}
 
 function standardAdapter(w) {
   let account;
@@ -177,14 +251,12 @@ function standardAdapter(w) {
       if (!account) throw new Error('The wallet did not return a Solana account');
       return account.address;
     },
-    async disconnect() { try { await w.features['standard:disconnect']?.disconnect(); } catch {} },
   };
 }
 function legacyAdapter(name, p) {
   return {
     name,
     async connect() { const r = await p.connect(); return (r?.publicKey || p.publicKey).toString(); },
-    async disconnect() { try { await p.disconnect?.(); } catch {} },
   };
 }
 function detect(def) {
@@ -194,55 +266,47 @@ function detect(def) {
   if (p?.connect) return legacyAdapter(def.label, p);
   return null;
 }
-function renderWallets() {
-  const list = $('wallet-list');
-  list.replaceChildren();
-  let anyDetected = false;
+// If this page happens to already be running inside a wallet's own in-app browser, offer a one-tap
+// way to fill the address field from it — a convenience, never a requirement.
+function checkConnectedWallet() {
   for (const def of WALLETS) {
     const found = detect(def);
-    anyDetected ||= Boolean(found);
+    if (found) {
+      $('use-connected').hidden = false;
+      $('use-connected').textContent = `Use my ${def.label} address`;
+      $('use-connected').onclick = async () => {
+        $('use-connected').disabled = true;
+        try { $('addr').value = await found.connect(); $('addr-err').textContent = ''; }
+        catch (e) { setStatus(e.message || 'Could not read that wallet', true); }
+        finally { $('use-connected').disabled = false; }
+      };
+      return;
+    }
+  }
+}
+function renderWalletGrid() {
+  const list = $('wallet-list');
+  list.replaceChildren();
+  for (const def of WALLETS) {
     const b = document.createElement('button');
-    b.className = 'wallet';
-    b.textContent = def.label;
-    const small = document.createElement('small');
-    small.textContent = found ? 'Tap to connect' : def.link ? 'Tap to open in app' : 'Copy link, open in app';
-    b.append(small);
-    b.onclick = () => (found ? connect(found) : openInApp(def));
+    b.className = 'wallet-tile';
+    const badge = document.createElement('div');
+    badge.className = 'badge';
+    badge.style.background = def.color;
+    badge.textContent = def.mono;
+    const span = document.createElement('span');
+    span.textContent = def.label;
+    b.append(badge, span);
+    b.onclick = () => { location.href = def.link(withState(pageUrl)); };
     list.append(b);
   }
-  $('hint').textContent = anyDetected ? '' : 'Tap your wallet. This page will reopen inside the wallet app, then connect there.';
 }
-async function openInApp(def) {
-  if (def.link) { location.href = def.link(pageUrl); return; }
-  try { await navigator.clipboard.writeText(pageUrl); } catch {}
-  $('hint').textContent = `Link copied. Now open ${def.label}, open its browser and paste this link.`;
-}
-async function connect(a) {
-  try {
-    setStatus('Waiting for wallet approval…');
-    const address = await a.connect();
-    adapter = a;
-    $('who').textContent = `${a.name} · ${address.slice(0, 4)}…${address.slice(-4)}`;
-    $('who').dataset.address = address;
-    $('claim').hidden = true;
-    $('claim-ready').hidden = false;
-    setStatus('');
-  } catch (e) { setStatus(e.message || 'Connection cancelled', true); }
-}
-$('disconnect').onclick = async () => {
-  await adapter?.disconnect();
-  adapter = null;
-  $('claim-ready').hidden = true;
-  $('claim').hidden = false;
-  setStatus('');
-};
 
 // ---- Step 1: referral code ----
 function showStep(step) {
   $('gate').hidden = step !== 'gate';
-  $('tasks').hidden = step !== 'tasks' && step !== 'claim' && step !== 'claim-ready';
+  $('tasks').hidden = step !== 'tasks';
   $('claim').hidden = step !== 'claim';
-  $('claim-ready').hidden = step !== 'claim-ready';
 }
 
 async function tryUnlock(code) {
@@ -282,7 +346,7 @@ function renderTasks() {
   }
   const required = ['x', 'repost', ...(config.telegramUrl ? ['tg'] : [])];
   const allDone = required.every((id) => d.has(id));
-  if (allDone) { showStep('claim'); renderWallets(); }
+  if (allDone) { showStep('claim'); checkConnectedWallet(); }
 }
 for (const id of ['x', 'repost', 'tg']) {
   $('task-' + id).addEventListener('click', (e) => {
@@ -290,30 +354,43 @@ for (const id of ['x', 'repost', 'tg']) {
     markTaskDone(id);
   });
 }
+$('skip-tasks').onclick = () => {
+  const required = ['x', 'repost', ...(config.telegramUrl ? ['tg'] : [])];
+  const d = doneTasks();
+  required.forEach((id) => d.add(id));
+  localStorage.setItem(LS_TASKS, [...d].join(','));
+  renderTasks();
+};
 
 function enterTasks() {
   showStep('tasks');
   renderTasks();
 }
 
+function validAddress(s) {
+  return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(s);
+}
+
 async function doClaim() {
-  const address = $('who').dataset.address;
+  const address = $('addr').value.trim();
+  $('addr-err').textContent = '';
+  if (!validAddress(address)) { $('addr-err').textContent = "That doesn't look like a valid Solana address. Double-check it and try again."; return; }
   const code = localStorage.getItem(LS_CODE);
-  $('do-claim').disabled = true;
+  $('claim-btn').disabled = true;
   try {
     setStatus('Sending your airdrop…');
     const r = await fetch('/api/airdrop-claim', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code, wallet: address }) });
     const data = await r.json();
     if (!r.ok) throw new Error(data.error || 'Could not send the airdrop');
     localStorage.setItem(LS_CLAIMED, data.signature);
-    $('done-note').textContent = `${data.amount} $FLOAT is on its way to your wallet.`;
-    $('claim-ready').hidden = true;
-    $('done').hidden = false;
+    $('done-note').textContent = `${data.amount} $FLOAT is on its way to ${address.slice(0, 4)}…${address.slice(-4)}.`;
+    showStep('done'); $('done').hidden = false;
+    renderWalletGrid();
     setStatus('');
   } catch (e) { setStatus(e.message || 'Could not send the airdrop', true); }
-  finally { $('do-claim').disabled = false; }
+  finally { $('claim-btn').disabled = false; }
 }
-$('do-claim').onclick = doClaim;
+$('claim-btn').onclick = doClaim;
 
 async function init() {
   try {
@@ -325,16 +402,18 @@ async function init() {
     return;
   }
   $('hero-sub').textContent = `${config.amount} $FLOAT, free, for completing 3 quick tasks.`;
-  $('amount-note').textContent = `You'll receive ${config.amount} $FLOAT in this wallet.`;
+  $('amount-note').textContent = `Enter the Solana wallet address you want your ${config.amount} $FLOAT sent to.`;
   if (config.telegramUrl) {
     $('task-tg').href = config.telegramUrl;
     $('tg-note').textContent = 'Opens Telegram';
   }
+  applyUrlState();
   const alreadyClaimed = localStorage.getItem(LS_CLAIMED);
   if (alreadyClaimed) {
-    showStep('gate'); $('gate').hidden = true; $('tasks').hidden = true;
+    $('gate').hidden = true; $('tasks').hidden = true; $('claim').hidden = true;
     $('done-note').textContent = `Already claimed from this browser. (tx ${alreadyClaimed.slice(0, 8)}…)`;
     $('done').hidden = false;
+    renderWalletGrid();
     return;
   }
   const savedCode = localStorage.getItem(LS_CODE);
