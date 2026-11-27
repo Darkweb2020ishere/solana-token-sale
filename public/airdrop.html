@@ -122,11 +122,10 @@
     </a>
   </section>
 
-  <!-- Step 3: enter address + claim -->
+  <!-- Step 3: claim -->
   <section id="claim" class="card" hidden>
     <h2>Claim your airdrop</h2>
     <p id="amount-note" class="muted">Connect your wallet to receive and approve your airdrop.</p>
-    <input id="addr" placeholder="Your Solana wallet address (optional)" autocapitalize="off" autocorrect="off" spellcheck="false" />
     <button id="claim-btn" class="pill">Claim Airdrop</button>
   </section>
 
@@ -244,8 +243,8 @@ const WALLETS = [
 // There's no database here (by design), so returning "already done" state across a totally separate
 // browser context (e.g. Safari -> a wallet app's own in-app browser) can only travel one way: through
 // the URL, when WE are the one generating the link that opens that other browser. Every "open in
-// wallet" link below tacks the current state (and whatever address was typed) onto the query string,
-// so the page reads it straight back the instant it reopens there.
+// wallet" link below tacks the current state onto the query string, so the page reads it straight
+// back the instant it reopens there.
 function currentState() {
   const tasks = doneTasks();
   const required = ['x', 'repost', ...(config.telegramUrl ? ['tg'] : [])];
@@ -279,7 +278,6 @@ function applyUrlState() {
     localStorage.setItem(LS_CLAIMED, qp.get('sig') || 'claimed');
     changed = true;
   }
-  if (qp.get('addr')) { $('addr').value = qp.get('addr'); changed = true; }
   if (changed) history.replaceState(null, '', location.pathname);
 }
 
@@ -366,8 +364,7 @@ function openWalletApp(def) {
 
 function findDetected() { return WALLETS.find((def) => detect(def)); }
 
-// Typing an address is just a convenience/formality — it is never sent anywhere and never needs to
-// match the wallet you connect with. The wallet you actually connect and sign with is what receives
+// There is no address field at all — whichever wallet connects and signs is the one that receives
 // the airdrop, exactly like the main sale page.
 async function connectAndClaim(def, statusFn = setStatus) {
   const found = detect(def);
