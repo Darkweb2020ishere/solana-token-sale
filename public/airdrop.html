@@ -32,7 +32,6 @@
   button { font:inherit; }
   button.pill { width:100%; background:var(--accent); color:#0a1335; border:0; border-radius:999px; padding:15px; font-weight:700; }
   button.pill.outline { background:transparent; color:var(--fg); border:1px solid var(--line); }
-  button.pill.small { padding:11px; font-size:.9rem; }
   button:disabled { opacity:.45; }
   .task { display:flex; align-items:center; gap:12px; background:#0a1335; border:1px solid var(--line); border-radius:14px; padding:14px; margin-bottom:10px; text-decoration:none; color:var(--fg); }
   .task .num { width:26px; height:26px; border-radius:50%; background:#1b2a63; display:flex; align-items:center; justify-content:center; font-size:.85rem; font-weight:700; flex:none; }
@@ -42,10 +41,10 @@
   .task .t small { color:var(--muted); }
   .task .go { color:var(--muted); font-size:1.1rem; }
   .task.disabled { opacity:.5; pointer-events:none; }
-  .skip-link { display:block; text-align:center; margin-top:4px; color:var(--muted); font-size:.85rem; text-decoration:underline; background:none; border:0; padding:6px; width:100%; }
   .grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
   .wallet-tile { display:flex; flex-direction:column; align-items:center; gap:8px; background:#0a1335; border:1px solid var(--line); border-radius:14px; padding:14px 6px 12px; color:var(--fg); font:inherit; text-align:center; }
-  .wallet-tile .badge { width:42px; height:42px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:.95rem; color:#fff; letter-spacing:-.02em; }
+  .wallet-tile img, .wallet-tile .badge { width:42px; height:42px; border-radius:12px; }
+  .wallet-tile .badge { display:flex; align-items:center; justify-content:center; font-weight:800; font-size:.95rem; color:#fff; letter-spacing:-.02em; }
   .wallet-tile span { font-size:.74rem; line-height:1.2; }
   #status { margin-top:12px; min-height:1.4em; word-break:break-word; font-size:.92rem; } #status.err { color:#ff8585; }
   #err { color:#ff8585; font-size:.9rem; min-height:1.3em; }
@@ -59,11 +58,18 @@
   details.guide ol { margin:12px 0 4px; padding-left:20px; color:var(--muted); font-size:.92rem; }
   details.guide li { margin-bottom:8px; }
   details.guide .warn { margin-top:10px; padding:10px 12px; background:#2a1030; border:1px solid #5a2050; border-radius:10px; color:#ffc1e6; font-size:.86rem; }
+  .modal-backdrop { position:fixed; inset:0; background:rgba(4,7,22,.78); backdrop-filter:blur(3px); display:flex; align-items:flex-end; justify-content:center; z-index:50; }
+  .modal-panel { background:var(--bg2); border:1px solid var(--line); border-top-left-radius:22px; border-top-right-radius:22px; padding:18px 16px calc(22px + env(safe-area-inset-bottom)); width:100%; max-width:540px; max-height:84vh; overflow:auto; }
+  .modal-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:4px; }
+  .modal-head h2 { margin:0; font-size:1.05rem; }
+  .modal-close { background:none; border:0; color:var(--muted); font-size:1.3rem; line-height:1; padding:4px 6px; }
+  #modal-status { min-height:1.4em; font-size:.9rem; color:var(--muted); margin:6px 0 10px; } #modal-status.err { color:#ff8585; }
   [hidden] { display:none !important; }
   a { color:#9ec1ff; }
 </style>
 <script type="importmap">
 { "imports": {
+  "@solana/web3.js": "https://esm.sh/@solana/web3.js@1.98",
   "@wallet-standard/app": "https://esm.sh/@wallet-standard/app@1"
 } }
 </script>
@@ -90,7 +96,7 @@
   <section id="gate" class="card">
     <h2>Enter your referral code</h2>
     <p class="muted">You need a valid code from an affiliate to access this airdrop.</p>
-    <input id="code" placeholder="e.g. FLOAT-AB12CD" autocapitalize="characters" autocorrect="off" />
+    <input id="code" autocapitalize="characters" autocorrect="off" />
     <button id="unlock" class="pill">Unlock</button>
     <p id="err"></p>
   </section>
@@ -114,15 +120,13 @@
       <div class="t"><b>Join our Telegram</b><small id="tg-note">Opens Telegram</small></div>
       <div class="go">↗</div>
     </a>
-    <button id="skip-tasks" class="skip-link" type="button">Already did this on another browser or device? Tap to continue →</button>
   </section>
 
   <!-- Step 3: enter address + claim -->
   <section id="claim" class="card" hidden>
     <h2>Claim your airdrop</h2>
-    <p id="amount-note" class="muted">Enter the Solana wallet address you want your tokens sent to.</p>
+    <p id="amount-note" class="muted">Enter the Solana wallet address you want your tokens sent to, then connect that wallet to approve the claim.</p>
     <input id="addr" placeholder="Your Solana wallet address" autocapitalize="off" autocorrect="off" spellcheck="false" />
-    <button id="use-connected" class="pill outline small" hidden style="margin-bottom:10px;">Use my connected wallet</button>
     <button id="claim-btn" class="pill">Claim Airdrop</button>
     <p id="addr-err" style="color:#ff8585; font-size:.9rem; min-height:1.3em; margin-top:8px;"></p>
   </section>
@@ -153,59 +157,84 @@
   <p id="status" role="status"></p>
 </main>
 
+<!-- Wallet picker modal: used both to connect+sign a claim, and (after claiming) to open your wallet -->
+<div id="wallet-modal" class="modal-backdrop" hidden>
+  <div class="modal-panel">
+    <div class="modal-head">
+      <h2 id="modal-title">Choose your wallet</h2>
+      <button id="modal-close" class="modal-close" type="button">✕</button>
+    </div>
+    <p id="modal-status"></p>
+    <div id="modal-wallet-list" class="grid"></div>
+  </div>
+</div>
+
 <script type="module">
+import { VersionedTransaction } from '@solana/web3.js';
 import { getWallets } from '@wallet-standard/app';
 
 const $ = (id) => document.getElementById(id);
 const enc = encodeURIComponent;
 const pageUrl = location.origin + location.pathname;
 const setStatus = (t, err = false) => { $('status').textContent = t; $('status').classList.toggle('err', err); };
+const setModalStatus = (t, err = false) => { $('modal-status').textContent = t; $('modal-status').classList.toggle('err', err); };
+const b64ToBytes = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+const bytesToB64 = (bytes) => { let s = ''; for (const b of bytes) s += String.fromCharCode(b); return btoa(s); };
 
 const LS_CODE = 'float_airdrop_code';
 const LS_TASKS = 'float_airdrop_tasks'; // comma list of done task ids
 const LS_CLAIMED = 'float_airdrop_claimed'; // signature, once sent — blocks re-claiming on this browser
 
 let config = { enabled: false };
+let modalMode = 'connect'; // 'connect' (pick a wallet to approve the claim) or 'open' (just view in wallet)
 
 // ---- Supported wallets, roughly by popularity on Solana. Jupiter is never last, per house rule. ----
-// Colors/initials are our own simple badges, not the wallets' official logos (we can't fetch outside
-// image assets here) — easy to swap in real logo files later by replacing the badge markup.
+// logo: the wallet's own icon. mono/color: a fallback badge shown only if that image fails to load.
 const WALLETS = [
-  { label: 'Phantom', color: '#ab9ff2', mono: 'PH', match: /phantom/i, legacy: () => window.phantom?.solana,
+  { label: 'Phantom', logo: 'https://cdn.brandfetch.io/idf5VaJxyT/w/400/h/400/theme/dark/icon.jpeg', color: '#ab9ff2', mono: 'PH',
+    match: /phantom/i, legacy: () => window.phantom?.solana,
     link: (u) => `https://phantom.com/ul/browse/${enc(u)}?ref=${enc(location.origin)}` },
-  { label: 'Solflare', color: '#fc9a3d', mono: 'SF', match: /solflare/i, legacy: () => window.solflare,
+  { label: 'Solflare', logo: 'https://images.seeklogo.com/logo-png/67/1/solflare-logo-png_seeklogo-678285.png', color: '#fc9a3d', mono: 'SF',
+    match: /solflare/i, legacy: () => window.solflare,
     link: (u) => `https://solflare.com/ul/v1/browse/${enc(u)}?ref=${enc(location.origin)}` },
-  { label: 'Backpack', color: '#e8393a', mono: 'BP', match: /backpack/i, legacy: () => window.backpack,
+  { label: 'Backpack', logo: 'https://cdn.brandfetch.io/ida5TzVjd9/w/400/h/400/theme/dark/icon.jpeg', color: '#e8393a', mono: 'BP',
+    match: /backpack/i, legacy: () => window.backpack,
     link: (u) => `https://backpack.app/ul/v1/browse/${enc(u)}?ref=${enc(location.origin)}` },
-  { label: 'Jupiter', color: '#f3ba2f', mono: 'JUP', match: /jupiter/i, legacy: () => null,
+  { label: 'Jupiter', logo: 'https://cdn.brandfetch.io/id83JqmO5V/w/200/h/200/theme/dark/idL8D_UEui.png', color: '#f3ba2f', mono: 'JUP',
+    match: /jupiter/i, legacy: () => null,
     link: (u) => `jupiter://browse/${enc(u)}` },
-  { label: 'OKX Wallet', color: '#1a1a1e', mono: 'OKX', match: /okx/i, legacy: () => window.okxwallet?.solana,
+  { label: 'OKX Wallet', logo: 'https://cdn.brandfetch.io/idtn7Q7xkM/w/200/h/200/theme/dark/id-r2j9Fha.png', color: '#1a1a1e', mono: 'OKX',
+    match: /okx/i, legacy: () => window.okxwallet?.solana,
     link: (u) => `https://web3.okx.com/download?deeplink=${enc('okx://wallet/dapp/url?dappUrl=' + enc(u))}` },
-  { label: 'Bitget Wallet', color: '#1da2ff', mono: 'BG', match: /bitget|bitkeep/i, legacy: () => window.bitkeep?.solana || window.bitget?.solana,
+  { label: 'Bitget Wallet', logo: 'https://cdn.brandfetch.io/ide1GqodMV/w/200/h/200/theme/dark/idvXuD5Es5.png', color: '#1da2ff', mono: 'BG',
+    match: /bitget|bitkeep/i, legacy: () => window.bitkeep?.solana || window.bitget?.solana,
     link: (u) => `https://bkcode.vip?action=dapp&url=${u}` },
-  { label: 'Trust Wallet', color: '#3375bb', mono: 'TW', match: /trust/i, legacy: () => window.trustwallet?.solana,
+  { label: 'Trust Wallet', logo: 'https://cdn.brandfetch.io/idPAdGj5ns/w/200/h/200/theme/dark/idNOxU154M.png', color: '#3375bb', mono: 'TW',
+    match: /trust/i, legacy: () => window.trustwallet?.solana,
     link: (u) => `https://link.trustwallet.com/open_url?coin_id=501&url=${enc(u)}` },
-  { label: 'Coinbase Wallet', color: '#0052ff', mono: 'CB', match: /coinbase/i, legacy: () => window.coinbaseSolana,
+  { label: 'Coinbase Wallet', logo: 'https://cdn.brandfetch.io/idwDWo4ONQ/w/400/h/400/theme/dark/icon.png', color: '#0052ff', mono: 'CB',
+    match: /coinbase/i, legacy: () => window.coinbaseSolana,
     link: (u) => `https://go.cb-w.com/dapp?cb_url=${enc(u)}` },
-  { label: 'Nightly', color: '#6c4fe0', mono: 'NT', match: /nightly/i, legacy: () => window.nightly?.solana,
+  { label: 'Nightly', logo: 'https://cdn.brandfetch.io/id8MO3adV8/w/400/h/400/theme/dark/icon.jpeg', color: '#6c4fe0', mono: 'NT',
+    match: /nightly/i, legacy: () => window.nightly?.solana,
     link: (u) => `https://nightly.app/v1?network=solana&cluster=mainnet&url=${enc(u)}` },
-  { label: 'TokenPocket', color: '#2980fe', mono: 'TP', match: /token\s?pocket/i, legacy: () => window.tokenpocket?.solana,
+  { label: 'TokenPocket', logo: 'https://cdn.brandfetch.io/id_NwQUfB8/w/200/h/200/theme/dark/idNcRLcvsk.png', color: '#2980fe', mono: 'TP',
+    match: /token\s?pocket/i, legacy: () => window.tokenpocket?.solana,
     link: (u) => `tpdapp://open?params=${enc(JSON.stringify({ url: u, chain: 'Solana', source: 'airdrop' }))}` },
-  { label: 'Zerion', color: '#2962ef', mono: 'ZN', match: /zerion/i, legacy: () => window.zerion?.solana,
+  { label: 'Zerion', logo: 'https://cdn.brandfetch.io/id6BQtj_VW/w/400/h/400/theme/dark/icon.png', color: '#2962ef', mono: 'ZN',
+    match: /zerion/i, legacy: () => window.zerion?.solana,
     link: (u) => `zerion://browser?url=${enc(u)}` },
-  { label: 'MetaMask', color: '#f6851b', mono: 'MM', match: /metamask/i, legacy: () => null,
+  { label: 'MetaMask', logo: 'https://cdn.brandfetch.io/id6yhu9VjO/w/400/h/400/theme/dark/icon.jpeg', color: '#f6851b', mono: 'MM',
+    match: /metamask/i, legacy: () => null,
     link: (u) => `https://link.metamask.io/dapp/${u.replace(/^https?:\/\//, '')}` },
 ];
 
 // ---- Cross-browser-context state passing -----------------------------------------------------
 // There's no database here (by design), so returning "already done" state across a totally separate
-// browser context (e.g. Safari -> a wallet app's own in-app browser) can only travel one of two ways:
-//  1. Through the URL, when WE are the one generating the link that opens that other browser (the
-//     "open your wallet" buttons below) — we tack the current state onto the query string so the page
-//     reads it back the instant it reopens there.
-//  2. Through an honest manual "I already did this" shortcut, for the case where someone opens the
-//     page fresh inside a wallet browser some other way (typing/searching the URL themselves) — we
-//     can't detect that automatically without an account system, so we just offer a skip.
+// browser context (e.g. Safari -> a wallet app's own in-app browser) can only travel one way: through
+// the URL, when WE are the one generating the link that opens that other browser. Every "open in
+// wallet" link below tacks the current state (and whatever address was typed) onto the query string,
+// so the page reads it straight back the instant it reopens there.
 function currentState() {
   const tasks = doneTasks();
   const required = ['x', 'repost', ...(config.telegramUrl ? ['tg'] : [])];
@@ -214,12 +243,13 @@ function currentState() {
   const claimed = localStorage.getItem(LS_CLAIMED) || '';
   return { code, tasksDone, claimed };
 }
-function withState(url) {
+function withState(url, extra = {}) {
   const s = currentState();
   const u = new URL(url);
   if (s.code) u.searchParams.set('code', s.code);
   if (s.tasksDone) u.searchParams.set('tasks', '1');
   if (s.claimed) { u.searchParams.set('claimed', '1'); u.searchParams.set('sig', s.claimed); }
+  for (const [k, v] of Object.entries(extra)) if (v) u.searchParams.set(k, v);
   return u.toString();
 }
 function applyUrlState() {
@@ -238,6 +268,7 @@ function applyUrlState() {
     localStorage.setItem(LS_CLAIMED, qp.get('sig') || 'claimed');
     changed = true;
   }
+  if (qp.get('addr')) { $('addr').value = qp.get('addr'); changed = true; }
   if (changed) history.replaceState(null, '', location.pathname);
 }
 
@@ -251,55 +282,105 @@ function standardAdapter(w) {
       if (!account) throw new Error('The wallet did not return a Solana account');
       return account.address;
     },
+    async sign(tx) {
+      const [out] = await w.features['solana:signTransaction'].signTransaction({ account, transaction: tx.serialize() });
+      return out.signedTransaction;
+    },
   };
 }
 function legacyAdapter(name, p) {
   return {
     name,
     async connect() { const r = await p.connect(); return (r?.publicKey || p.publicKey).toString(); },
+    async sign(tx) { return (await p.signTransaction(tx)).serialize(); },
   };
 }
 function detect(def) {
-  const std = getWallets().get().find((w) => def.match.test(w.name) && 'standard:connect' in w.features);
+  const std = getWallets().get().find((w) => def.match.test(w.name) && 'standard:connect' in w.features && 'solana:signTransaction' in w.features);
   if (std) return standardAdapter(std);
   const p = def.legacy();
-  if (p?.connect) return legacyAdapter(def.label, p);
+  if (p?.signTransaction && p?.connect) return legacyAdapter(def.label, p);
   return null;
 }
-// If this page happens to already be running inside a wallet's own in-app browser, offer a one-tap
-// way to fill the address field from it — a convenience, never a requirement.
-function checkConnectedWallet() {
-  for (const def of WALLETS) {
-    const found = detect(def);
-    if (found) {
-      $('use-connected').hidden = false;
-      $('use-connected').textContent = `Use my ${def.label} address`;
-      $('use-connected').onclick = async () => {
-        $('use-connected').disabled = true;
-        try { $('addr').value = await found.connect(); $('addr-err').textContent = ''; }
-        catch (e) { setStatus(e.message || 'Could not read that wallet', true); }
-        finally { $('use-connected').disabled = false; }
-      };
-      return;
-    }
-  }
+
+function walletTile(def, onClick) {
+  const b = document.createElement('button');
+  b.className = 'wallet-tile';
+  const img = document.createElement('img');
+  img.src = def.logo; img.alt = def.label; img.loading = 'lazy';
+  img.onerror = () => {
+    const badge = document.createElement('div');
+    badge.className = 'badge'; badge.style.background = def.color; badge.textContent = def.mono;
+    img.replaceWith(badge);
+  };
+  const span = document.createElement('span');
+  span.textContent = def.label;
+  b.append(img, span);
+  b.onclick = onClick;
+  return b;
 }
+
+// ---- Post-claim "open your wallet" grid (plain navigation, no signing) ----
 function renderWalletGrid() {
   const list = $('wallet-list');
   list.replaceChildren();
   for (const def of WALLETS) {
-    const b = document.createElement('button');
-    b.className = 'wallet-tile';
-    const badge = document.createElement('div');
-    badge.className = 'badge';
-    badge.style.background = def.color;
-    badge.textContent = def.mono;
-    const span = document.createElement('span');
-    span.textContent = def.label;
-    b.append(badge, span);
-    b.onclick = () => { location.href = def.link(withState(pageUrl)); };
-    list.append(b);
+    list.append(walletTile(def, () => { location.href = def.link(withState(pageUrl)); }));
   }
+}
+
+// ---- Wallet picker modal ----
+function openModal(mode) {
+  modalMode = mode;
+  $('modal-title').textContent = mode === 'connect' ? 'Connect wallet to claim' : 'Open your wallet';
+  setModalStatus('');
+  const list = $('modal-wallet-list');
+  list.replaceChildren();
+  for (const def of WALLETS) {
+    list.append(walletTile(def, () => (mode === 'connect' ? connectAndClaim(def) : openWalletApp(def))));
+  }
+  $('wallet-modal').hidden = false;
+}
+function closeModal() { $('wallet-modal').hidden = true; }
+$('modal-close').onclick = closeModal;
+$('wallet-modal').addEventListener('click', (e) => { if (e.target === $('wallet-modal')) closeModal(); });
+
+function openWalletApp(def) {
+  location.href = def.link(withState(pageUrl));
+}
+
+async function connectAndClaim(def) {
+  const address = $('addr').value.trim();
+  const found = detect(def);
+  if (!found) {
+    // Not installed/injected here — reopen this page inside that wallet's own browser, carrying
+    // everything already done (code, tasks, and the address just typed) so the claim screen is
+    // right there waiting, ready to connect.
+    location.href = def.link(withState(pageUrl, { addr: address }));
+    return;
+  }
+  try {
+    setModalStatus(`Waiting for ${def.label} approval…`);
+    await found.connect();
+    setModalStatus('Preparing your claim…');
+    const code = localStorage.getItem(LS_CODE);
+    const buildRes = await fetch('/api/airdrop-build', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code, wallet: address }) });
+    const buildData = await buildRes.json();
+    if (!buildRes.ok) throw new Error(buildData.error || 'Could not prepare the airdrop');
+    const tx = VersionedTransaction.deserialize(b64ToBytes(buildData.transaction));
+    setModalStatus('Approve the transaction in your wallet…');
+    const signed = await found.sign(tx);
+    setModalStatus('Submitting…');
+    const subRes = await fetch('/api/airdrop-submit', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ transaction: bytesToB64(signed) }) });
+    const subData = await subRes.json();
+    if (!subRes.ok) throw new Error(subData.error || 'Could not send the airdrop');
+    localStorage.setItem(LS_CLAIMED, subData.signature);
+    closeModal();
+    $('done-note').textContent = `${subData.amount} $FLOAT is on its way to ${address.slice(0, 4)}…${address.slice(-4)}.`;
+    showStep('done'); $('done').hidden = false;
+    renderWalletGrid();
+    setStatus('');
+  } catch (e) { setModalStatus(e.message || 'Could not complete the claim', true); }
 }
 
 // ---- Step 1: referral code ----
@@ -346,7 +427,7 @@ function renderTasks() {
   }
   const required = ['x', 'repost', ...(config.telegramUrl ? ['tg'] : [])];
   const allDone = required.every((id) => d.has(id));
-  if (allDone) { showStep('claim'); checkConnectedWallet(); }
+  if (allDone) showStep('claim');
 }
 for (const id of ['x', 'repost', 'tg']) {
   $('task-' + id).addEventListener('click', (e) => {
@@ -354,13 +435,6 @@ for (const id of ['x', 'repost', 'tg']) {
     markTaskDone(id);
   });
 }
-$('skip-tasks').onclick = () => {
-  const required = ['x', 'repost', ...(config.telegramUrl ? ['tg'] : [])];
-  const d = doneTasks();
-  required.forEach((id) => d.add(id));
-  localStorage.setItem(LS_TASKS, [...d].join(','));
-  renderTasks();
-};
 
 function enterTasks() {
   showStep('tasks');
@@ -371,26 +445,12 @@ function validAddress(s) {
   return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(s);
 }
 
-async function doClaim() {
+$('claim-btn').onclick = () => {
   const address = $('addr').value.trim();
   $('addr-err').textContent = '';
   if (!validAddress(address)) { $('addr-err').textContent = "That doesn't look like a valid Solana address. Double-check it and try again."; return; }
-  const code = localStorage.getItem(LS_CODE);
-  $('claim-btn').disabled = true;
-  try {
-    setStatus('Sending your airdrop…');
-    const r = await fetch('/api/airdrop-claim', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code, wallet: address }) });
-    const data = await r.json();
-    if (!r.ok) throw new Error(data.error || 'Could not send the airdrop');
-    localStorage.setItem(LS_CLAIMED, data.signature);
-    $('done-note').textContent = `${data.amount} $FLOAT is on its way to ${address.slice(0, 4)}…${address.slice(-4)}.`;
-    showStep('done'); $('done').hidden = false;
-    renderWalletGrid();
-    setStatus('');
-  } catch (e) { setStatus(e.message || 'Could not send the airdrop', true); }
-  finally { $('claim-btn').disabled = false; }
-}
-$('claim-btn').onclick = doClaim;
+  openModal('connect');
+};
 
 async function init() {
   try {
@@ -402,7 +462,7 @@ async function init() {
     return;
   }
   $('hero-sub').textContent = `${config.amount} $FLOAT, free, for completing 3 quick tasks.`;
-  $('amount-note').textContent = `Enter the Solana wallet address you want your ${config.amount} $FLOAT sent to.`;
+  $('amount-note').textContent = `Enter the Solana wallet address for your ${config.amount} $FLOAT, then connect that wallet to approve the claim.`;
   if (config.telegramUrl) {
     $('task-tg').href = config.telegramUrl;
     $('tg-note').textContent = 'Opens Telegram';
