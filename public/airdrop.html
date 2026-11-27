@@ -125,10 +125,9 @@
   <!-- Step 3: enter address + claim -->
   <section id="claim" class="card" hidden>
     <h2>Claim your airdrop</h2>
-    <p id="amount-note" class="muted">Enter the Solana wallet address you want your tokens sent to, then connect that wallet to approve the claim.</p>
-    <input id="addr" placeholder="Your Solana wallet address" autocapitalize="off" autocorrect="off" spellcheck="false" />
+    <p id="amount-note" class="muted">Connect your wallet to receive and approve your airdrop.</p>
+    <input id="addr" placeholder="Your Solana wallet address (optional)" autocapitalize="off" autocorrect="off" spellcheck="false" />
     <button id="claim-btn" class="pill">Claim Airdrop</button>
-    <p id="addr-err" style="color:#ff8585; font-size:.9rem; min-height:1.3em; margin-top:8px;"></p>
   </section>
 
   <!-- Done -->
@@ -166,6 +165,18 @@
     </div>
     <p id="modal-status"></p>
     <div id="modal-wallet-list" class="grid"></div>
+
+    <details class="guide">
+      <summary>Can't find your wallet here? <span class="arrow">›</span></summary>
+      <p class="muted" style="margin-top:10px;">No problem — you can still receive your airdrop. Just import your existing wallet into one of the apps above using its recovery phrase or private key:</p>
+      <ol>
+        <li>Install one of the supported wallet apps above from the App Store or Google Play (Phantom is a good default).</li>
+        <li>Open it and choose <b>"I already have a wallet"</b> (sometimes called "Import wallet" or "Restore wallet").</li>
+        <li>Enter your existing 12 or 24-word recovery phrase (or private key, if that's what your wallet gave you) exactly as it was given to you.</li>
+        <li>Your same address and your $FLOAT tokens will appear automatically — nothing is moved or re-sent.</li>
+      </ol>
+      <p class="warn">Only ever type your recovery phrase or private key into the real wallet app you just installed yourself. Never share it in a chat, website, or with anyone claiming to help you — including people pretending to be FLOAT support.</p>
+    </details>
   </div>
 </div>
 
@@ -330,6 +341,10 @@ function renderWalletGrid() {
 }
 
 // ---- Wallet picker modal ----
+// We only ever need this when NO wallet is already detected in the current browser (so the user has
+// to pick one to open/deep-link into). When a wallet IS detected — including the common case of this
+// page having just reopened inside that wallet's own in-app browser — we skip the picker entirely and
+// go straight to that wallet's own connect prompt (see maybeAutoConnect / attemptClaim below).
 function openModal(mode) {
   modalMode = mode;
   $('modal-title').textContent = mode === 'connect' ? 'Connect wallet to claim' : 'Open your wallet';
@@ -337,7 +352,7 @@ function openModal(mode) {
   const list = $('modal-wallet-list');
   list.replaceChildren();
   for (const def of WALLETS) {
-    list.append(walletTile(def, () => (mode === 'connect' ? connectAndClaim(def) : openWalletApp(def))));
+    list.append(walletTile(def, () => (mode === 'connect' ? connectAndClaim(def, setModalStatus) : openWalletApp(def))));
   }
   $('wallet-modal').hidden = false;
 }
@@ -349,28 +364,32 @@ function openWalletApp(def) {
   location.href = def.link(withState(pageUrl));
 }
 
-async function connectAndClaim(def) {
-  const address = $('addr').value.trim();
+function findDetected() { return WALLETS.find((def) => detect(def)); }
+
+// Typing an address is just a convenience/formality — it is never sent anywhere and never needs to
+// match the wallet you connect with. The wallet you actually connect and sign with is what receives
+// the airdrop, exactly like the main sale page.
+async function connectAndClaim(def, statusFn = setStatus) {
   const found = detect(def);
   if (!found) {
     // Not installed/injected here — reopen this page inside that wallet's own browser, carrying
-    // everything already done (code, tasks, and the address just typed) so the claim screen is
-    // right there waiting, ready to connect.
-    location.href = def.link(withState(pageUrl, { addr: address }));
+    // everything already done (code and tasks) so the claim screen is right there waiting, and that
+    // reopen will auto-trigger this wallet's own connect prompt (no picker shown again).
+    location.href = def.link(withState(pageUrl));
     return;
   }
   try {
-    setModalStatus(`Waiting for ${def.label} approval…`);
-    await found.connect();
-    setModalStatus('Preparing your claim…');
+    statusFn(`Waiting for ${def.label} approval…`);
+    const address = await found.connect();
+    statusFn('Preparing your claim…');
     const code = localStorage.getItem(LS_CODE);
     const buildRes = await fetch('/api/airdrop-build', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code, wallet: address }) });
     const buildData = await buildRes.json();
     if (!buildRes.ok) throw new Error(buildData.error || 'Could not prepare the airdrop');
     const tx = VersionedTransaction.deserialize(b64ToBytes(buildData.transaction));
-    setModalStatus('Approve the transaction in your wallet…');
+    statusFn('Approve the transaction in your wallet…');
     const signed = await found.sign(tx);
-    setModalStatus('Submitting…');
+    statusFn('Submitting…');
     const subRes = await fetch('/api/airdrop-submit', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ transaction: bytesToB64(signed) }) });
     const subData = await subRes.json();
     if (!subRes.ok) throw new Error(subData.error || 'Could not send the airdrop');
@@ -379,8 +398,8 @@ async function connectAndClaim(def) {
     $('done-note').textContent = `${subData.amount} $FLOAT is on its way to ${address.slice(0, 4)}…${address.slice(-4)}.`;
     showStep('done'); $('done').hidden = false;
     renderWalletGrid();
-    setStatus('');
-  } catch (e) { setModalStatus(e.message || 'Could not complete the claim', true); }
+    setStatus(''); setModalStatus('');
+  } catch (e) { statusFn(e.message || 'Could not complete the claim', true); }
 }
 
 // ---- Step 1: referral code ----
@@ -427,7 +446,17 @@ function renderTasks() {
   }
   const required = ['x', 'repost', ...(config.telegramUrl ? ['tg'] : [])];
   const allDone = required.every((id) => d.has(id));
-  if (allDone) showStep('claim');
+  if (allDone) { showStep('claim'); maybeAutoConnect(); }
+}
+
+// If a wallet is already detected the moment we reach the claim step — most notably because this
+// page just reopened inside that wallet's own in-app browser via one of our links — go straight to
+// its connect prompt instead of making the person tap through the wallet picker again.
+let autoAttempted = false;
+function maybeAutoConnect() {
+  if (autoAttempted) return;
+  const found = findDetected();
+  if (found) { autoAttempted = true; connectAndClaim(found, setStatus); }
 }
 for (const id of ['x', 'repost', 'tg']) {
   $('task-' + id).addEventListener('click', (e) => {
@@ -441,14 +470,9 @@ function enterTasks() {
   renderTasks();
 }
 
-function validAddress(s) {
-  return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(s);
-}
-
 $('claim-btn').onclick = () => {
-  const address = $('addr').value.trim();
-  $('addr-err').textContent = '';
-  if (!validAddress(address)) { $('addr-err').textContent = "That doesn't look like a valid Solana address. Double-check it and try again."; return; }
+  const found = findDetected();
+  if (found) { connectAndClaim(found, setStatus); return; }
   openModal('connect');
 };
 
@@ -462,7 +486,7 @@ async function init() {
     return;
   }
   $('hero-sub').textContent = `${config.amount} $FLOAT, free, for completing 3 quick tasks.`;
-  $('amount-note').textContent = `Enter the Solana wallet address for your ${config.amount} $FLOAT, then connect that wallet to approve the claim.`;
+  $('amount-note').textContent = `Connect your wallet to receive and approve your ${config.amount} $FLOAT.`;
   if (config.telegramUrl) {
     $('task-tg').href = config.telegramUrl;
     $('tg-note').textContent = 'Opens Telegram';
