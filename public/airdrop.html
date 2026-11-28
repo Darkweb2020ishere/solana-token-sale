@@ -69,7 +69,6 @@
 </style>
 <script type="importmap">
 { "imports": {
-  "@solana/web3.js": "https://esm.sh/@solana/web3.js@1.98",
   "@wallet-standard/app": "https://esm.sh/@wallet-standard/app@1"
 } }
 </script>
@@ -136,30 +135,16 @@
       <h2>Airdrop sent!</h2>
       <p class="muted" id="done-note"></p>
     </div>
-    <h2 style="margin-top:18px;">Open your wallet to view it</h2>
-    <div id="wallet-list" class="grid"></div>
-
-    <details class="guide">
-      <summary>Can't find your wallet here? <span class="arrow">›</span></summary>
-      <p class="muted" style="margin-top:10px;">No problem — you can still receive your airdrop. Just import your existing wallet into one of the apps above using its recovery phrase or private key:</p>
-      <ol>
-        <li>Install one of the supported wallet apps above from the App Store or Google Play (Phantom is a good default).</li>
-        <li>Open it and choose <b>"I already have a wallet"</b> (sometimes called "Import wallet" or "Restore wallet").</li>
-        <li>Enter your existing 12 or 24-word recovery phrase (or private key, if that's what your wallet gave you) exactly as it was given to you.</li>
-        <li>Your same address and your $FLOAT tokens will appear automatically — nothing is moved or re-sent.</li>
-      </ol>
-      <p class="warn">Only ever type your recovery phrase or private key into the real wallet app you just installed yourself. Never share it in a chat, website, or with anyone claiming to help you — including people pretending to be FLOAT support.</p>
-    </details>
   </section>
 
   <p id="status" role="status"></p>
 </main>
 
-<!-- Wallet picker modal: used both to connect+sign a claim, and (after claiming) to open your wallet -->
+<!-- Wallet picker modal: pick a wallet to connect and claim with -->
 <div id="wallet-modal" class="modal-backdrop" hidden>
   <div class="modal-panel">
     <div class="modal-head">
-      <h2 id="modal-title">Choose your wallet</h2>
+      <h2 id="modal-title">Connect wallet to claim</h2>
       <button id="modal-close" class="modal-close" type="button">✕</button>
     </div>
     <p id="modal-status"></p>
@@ -180,7 +165,6 @@
 </div>
 
 <script type="module">
-import { VersionedTransaction } from '@solana/web3.js';
 import { getWallets } from '@wallet-standard/app';
 
 const $ = (id) => document.getElementById(id);
@@ -188,15 +172,12 @@ const enc = encodeURIComponent;
 const pageUrl = location.origin + location.pathname;
 const setStatus = (t, err = false) => { $('status').textContent = t; $('status').classList.toggle('err', err); };
 const setModalStatus = (t, err = false) => { $('modal-status').textContent = t; $('modal-status').classList.toggle('err', err); };
-const b64ToBytes = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-const bytesToB64 = (bytes) => { let s = ''; for (const b of bytes) s += String.fromCharCode(b); return btoa(s); };
 
 const LS_CODE = 'float_airdrop_code';
 const LS_TASKS = 'float_airdrop_tasks'; // comma list of done task ids
 const LS_CLAIMED = 'float_airdrop_claimed'; // signature, once sent — blocks re-claiming on this browser
 
 let config = { enabled: false };
-let modalMode = 'connect'; // 'connect' (pick a wallet to approve the claim) or 'open' (just view in wallet)
 
 // ---- Supported wallets, roughly by popularity on Solana. Jupiter is never last, per house rule. ----
 // logo: the wallet's own icon. mono/color: a fallback badge shown only if that image fails to load.
@@ -281,19 +262,16 @@ function applyUrlState() {
   if (changed) history.replaceState(null, '', location.pathname);
 }
 
+// Claiming a free airdrop needs no signature at all — connecting is only how we learn which address
+// to send the tokens to, exactly like the main sale page's own wallet-connect step.
 function standardAdapter(w) {
-  let account;
   return {
     name: w.name,
     async connect() {
       const { accounts } = await w.features['standard:connect'].connect();
-      account = accounts.find((a) => a.chains?.some((c) => c.startsWith('solana:'))) ?? accounts[0];
+      const account = accounts.find((a) => a.chains?.some((c) => c.startsWith('solana:'))) ?? accounts[0];
       if (!account) throw new Error('The wallet did not return a Solana account');
       return account.address;
-    },
-    async sign(tx) {
-      const [out] = await w.features['solana:signTransaction'].signTransaction({ account, transaction: tx.serialize() });
-      return out.signedTransaction;
     },
   };
 }
@@ -301,14 +279,13 @@ function legacyAdapter(name, p) {
   return {
     name,
     async connect() { const r = await p.connect(); return (r?.publicKey || p.publicKey).toString(); },
-    async sign(tx) { return (await p.signTransaction(tx)).serialize(); },
   };
 }
 function detect(def) {
-  const std = getWallets().get().find((w) => def.match.test(w.name) && 'standard:connect' in w.features && 'solana:signTransaction' in w.features);
+  const std = getWallets().get().find((w) => def.match.test(w.name) && 'standard:connect' in w.features);
   if (std) return standardAdapter(std);
   const p = def.legacy();
-  if (p?.signTransaction && p?.connect) return legacyAdapter(def.label, p);
+  if (p?.connect) return legacyAdapter(def.label, p);
   return null;
 }
 
@@ -329,28 +306,17 @@ function walletTile(def, onClick) {
   return b;
 }
 
-// ---- Post-claim "open your wallet" grid (plain navigation, no signing) ----
-function renderWalletGrid() {
-  const list = $('wallet-list');
-  list.replaceChildren();
-  for (const def of WALLETS) {
-    list.append(walletTile(def, () => { location.href = def.link(withState(pageUrl)); }));
-  }
-}
-
 // ---- Wallet picker modal ----
 // We only ever need this when NO wallet is already detected in the current browser (so the user has
 // to pick one to open/deep-link into). When a wallet IS detected — including the common case of this
 // page having just reopened inside that wallet's own in-app browser — we skip the picker entirely and
 // go straight to that wallet's own connect prompt (see maybeAutoConnect / attemptClaim below).
-function openModal(mode) {
-  modalMode = mode;
-  $('modal-title').textContent = mode === 'connect' ? 'Connect wallet to claim' : 'Open your wallet';
+function openModal() {
   setModalStatus('');
   const list = $('modal-wallet-list');
   list.replaceChildren();
   for (const def of WALLETS) {
-    list.append(walletTile(def, () => (mode === 'connect' ? connectAndClaim(def, setModalStatus) : openWalletApp(def))));
+    list.append(walletTile(def, () => connectAndClaim(def, setModalStatus)));
   }
   $('wallet-modal').hidden = false;
 }
@@ -358,14 +324,11 @@ function closeModal() { $('wallet-modal').hidden = true; }
 $('modal-close').onclick = closeModal;
 $('wallet-modal').addEventListener('click', (e) => { if (e.target === $('wallet-modal')) closeModal(); });
 
-function openWalletApp(def) {
-  location.href = def.link(withState(pageUrl));
-}
-
 function findDetected() { return WALLETS.find((def) => detect(def)); }
 
-// There is no address field at all — whichever wallet connects and signs is the one that receives
-// the airdrop, exactly like the main sale page.
+// There is no address field at all — whichever wallet connects is the one that receives the airdrop.
+// Connecting is only how we learn the address; receiving a free airdrop needs no signature, so there's
+// nothing further for the wallet to approve.
 async function connectAndClaim(def, statusFn = setStatus) {
   const found = detect(def);
   if (!found) {
@@ -378,23 +341,15 @@ async function connectAndClaim(def, statusFn = setStatus) {
   try {
     statusFn(`Waiting for ${def.label} approval…`);
     const address = await found.connect();
-    statusFn('Preparing your claim…');
+    statusFn('Sending your airdrop…');
     const code = localStorage.getItem(LS_CODE);
-    const buildRes = await fetch('/api/airdrop-build', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code, wallet: address }) });
-    const buildData = await buildRes.json();
-    if (!buildRes.ok) throw new Error(buildData.error || 'Could not prepare the airdrop');
-    const tx = VersionedTransaction.deserialize(b64ToBytes(buildData.transaction));
-    statusFn('Approve the transaction in your wallet…');
-    const signed = await found.sign(tx);
-    statusFn('Submitting…');
-    const subRes = await fetch('/api/airdrop-submit', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ transaction: bytesToB64(signed) }) });
-    const subData = await subRes.json();
-    if (!subRes.ok) throw new Error(subData.error || 'Could not send the airdrop');
-    localStorage.setItem(LS_CLAIMED, subData.signature);
+    const r = await fetch('/api/airdrop-claim', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code, wallet: address }) });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Could not send the airdrop');
+    localStorage.setItem(LS_CLAIMED, data.signature);
     closeModal();
-    $('done-note').textContent = `${subData.amount} $FLOAT is on its way to ${address.slice(0, 4)}…${address.slice(-4)}.`;
+    $('done-note').textContent = `${data.amount} $FLOAT is on its way to ${address.slice(0, 4)}…${address.slice(-4)}.`;
     showStep('done'); $('done').hidden = false;
-    renderWalletGrid();
     setStatus(''); setModalStatus('');
   } catch (e) { statusFn(e.message || 'Could not complete the claim', true); }
 }
@@ -470,7 +425,7 @@ function enterTasks() {
 $('claim-btn').onclick = () => {
   const found = findDetected();
   if (found) { connectAndClaim(found, setStatus); return; }
-  openModal('connect');
+  openModal();
 };
 
 async function init() {
