@@ -3,27 +3,73 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Token Sale</title>
+<title>FLOAT Sale</title>
 <style>
-  :root { color-scheme: light dark; --bg:#0f1115; --fg:#eef0f4; --muted:#9aa3b2; --card:#181b22; --line:#2a2f3a; --accent:#7c5cff; }
-  @media (prefers-color-scheme: light) { :root { --bg:#f6f7fb; --fg:#14161c; --muted:#5d6677; --card:#fff; --line:#dde1ea; } }
+  :root { color-scheme: dark; --bg1:#060a1f; --bg2:#0d1a4a; --fg:#eef1fb; --muted:#9db0d6; --card:#0f1940cc; --line:#2a3a74; --accent:#ffffff; --glow:#4e7bff; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.5 -apple-system, system-ui, sans-serif; }
-  main { max-width:520px; margin:0 auto; padding:20px 16px calc(48px + env(safe-area-inset-bottom)); }
-  h1 { font-size:1.5rem; margin:0 0 4px; } h2 { font-size:1.05rem; margin:26px 0 10px; } h3 { font-size:1rem; margin:18px 0 8px; }
-  .muted { color:var(--muted); font-size:.92rem; } .mono { font-family:ui-monospace, monospace; word-break:break-all; font-size:.85rem; }
-  .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-  .wallet { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px 12px; min-height:64px; color:var(--fg); text-align:left; font:inherit; }
-  .wallet small { display:block; color:var(--muted); font-size:.78rem; }
-  label { display:block; margin:8px 0 4px; }
-  select, input { width:100%; padding:14px; border-radius:12px; border:1px solid var(--line); background:var(--card); color:var(--fg); font-size:16px; margin-bottom:10px; }
-  button.main { width:100%; background:var(--accent); color:#fff; border:0; border-radius:12px; padding:15px; font:inherit; font-weight:600; }
-  button:disabled { opacity:.5; }
-  button.link { background:none; border:0; color:var(--accent); font:inherit; padding:0 0 0 6px; }
-  dl { display:grid; grid-template-columns:auto 1fr; gap:6px 14px; background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; }
+  body {
+    margin:0; color:var(--fg); font:16px/1.5 -apple-system, system-ui, sans-serif;
+    background: radial-gradient(1200px 600px at 50% -10%, #1c3ad6 0%, transparent 60%), linear-gradient(180deg, var(--bg1), var(--bg2));
+    min-height:100vh;
+  }
+  main { max-width:540px; margin:0 auto; padding:18px 16px calc(56px + env(safe-area-inset-bottom)); }
+  header { display:flex; align-items:center; gap:10px; padding:6px 2px 18px; flex-wrap:wrap; }
+  header img { width:30px; height:30px; border-radius:8px; }
+  header .brand { font-weight:800; letter-spacing:.04em; font-size:1.05rem; }
+  nav.menu { display:flex; align-items:center; gap:16px; margin-left:auto; }
+  nav.menu a { color:var(--muted); text-decoration:none; font-weight:700; font-size:.9rem; padding-bottom:3px; border-bottom:2px solid transparent; }
+  nav.menu a.active { color:var(--fg); border-color:var(--accent); }
+  header a.x { width:34px; height:34px; border-radius:50%; border:1px solid var(--line); display:flex; align-items:center; justify-content:center; color:var(--fg); text-decoration:none; font-weight:700; flex:none; }
+  .hero { text-align:center; padding:10px 6px 26px; }
+  .hero img { width:84px; height:84px; border-radius:20px; box-shadow:0 0 60px 4px var(--glow); margin-bottom:14px; }
+  .hero h1 { font-size:1.7rem; margin:0 0 8px; font-weight:800; }
+  .hero p { color:var(--muted); margin:0; font-size:.98rem; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:18px; padding:18px; margin-bottom:14px; backdrop-filter:blur(6px); }
+  .card h2 { font-size:1.02rem; margin:0 0 12px; }
+  .muted { color:var(--muted); font-size:.92rem; }
+  input, select { width:100%; padding:15px; border-radius:12px; border:1px solid var(--line); background:#0a1335; color:var(--fg); font-size:16px; margin-bottom:10px; }
+  input::placeholder { color:#5b6ca3; }
+  button { font:inherit; }
+  button.pill { width:100%; background:var(--accent); color:#0a1335; border:0; border-radius:999px; padding:15px; font-weight:700; }
+  button.pill.outline { background:transparent; color:var(--fg); border:1px solid var(--line); }
+  button:disabled { opacity:.45; }
+  button.link { background:none; border:0; color:#9ec1ff; font:inherit; padding:0 0 0 6px; }
+  .task { display:flex; align-items:center; gap:12px; background:#0a1335; border:1px solid var(--line); border-radius:14px; padding:14px; margin-bottom:10px; text-decoration:none; color:var(--fg); }
+  .task .num { width:26px; height:26px; border-radius:50%; background:#1b2a63; display:flex; align-items:center; justify-content:center; font-size:.85rem; font-weight:700; flex:none; }
+  .task.done .num { background:#1d7a4c; }
+  .task .t { flex:1; }
+  .task .t b { display:block; }
+  .task .t small { color:var(--muted); }
+  .task .go { color:var(--muted); font-size:1.1rem; }
+  .task.disabled { opacity:.5; pointer-events:none; }
+  .grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+  .wallet-tile { display:flex; flex-direction:column; align-items:center; gap:8px; background:#0a1335; border:1px solid var(--line); border-radius:14px; padding:14px 6px 12px; color:var(--fg); font:inherit; text-align:center; }
+  .wallet-tile img, .wallet-tile .badge { width:42px; height:42px; border-radius:12px; }
+  .wallet-tile .badge { display:flex; align-items:center; justify-content:center; font-weight:800; font-size:.95rem; color:#fff; letter-spacing:-.02em; }
+  .wallet-tile span { font-size:.74rem; line-height:1.2; }
+  dl { display:grid; grid-template-columns:auto 1fr; gap:6px 14px; background:#0a1335; border:1px solid var(--line); border-radius:14px; padding:14px; margin-bottom:10px; }
   dt { color:var(--muted); } dd { margin:0; }
-  #status { margin-top:14px; min-height:1.5em; word-break:break-word; } #status.err { color:#ff6b6b; }
+  .mono { font-family:ui-monospace, monospace; word-break:break-all; font-size:.85rem; }
+  #status { margin-top:12px; min-height:1.4em; word-break:break-word; font-size:.92rem; } #status.err { color:#ff8585; }
+  #err { color:#ff8585; font-size:.9rem; min-height:1.3em; }
+  .done-badge { text-align:center; padding:30px 10px; }
+  .done-badge .tick { width:64px; height:64px; border-radius:50%; background:#1d7a4c; display:flex; align-items:center; justify-content:center; font-size:2rem; margin:0 auto 14px; }
+  details.guide { background:#0a1335; border:1px solid var(--line); border-radius:14px; padding:14px 16px; margin-top:14px; }
+  details.guide summary { cursor:pointer; font-weight:700; list-style:none; display:flex; align-items:center; justify-content:space-between; }
+  details.guide summary::-webkit-details-marker { display:none; }
+  details.guide summary .arrow { transition:transform .15s; color:var(--muted); }
+  details.guide[open] summary .arrow { transform:rotate(90deg); }
+  details.guide ol { margin:12px 0 4px; padding-left:20px; color:var(--muted); font-size:.92rem; }
+  details.guide li { margin-bottom:8px; }
+  details.guide .warn { margin-top:10px; padding:10px 12px; background:#2a1030; border:1px solid #5a2050; border-radius:10px; color:#ffc1e6; font-size:.86rem; }
+  .modal-backdrop { position:fixed; inset:0; background:rgba(4,7,22,.78); backdrop-filter:blur(3px); display:flex; align-items:flex-end; justify-content:center; z-index:50; }
+  .modal-panel { background:var(--bg2); border:1px solid var(--line); border-top-left-radius:22px; border-top-right-radius:22px; padding:18px 16px calc(22px + env(safe-area-inset-bottom)); width:100%; max-width:540px; max-height:84vh; overflow:auto; }
+  .modal-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:4px; }
+  .modal-head h2 { margin:0; font-size:1.05rem; }
+  .modal-close { background:none; border:0; color:var(--muted); font-size:1.3rem; line-height:1; padding:4px 6px; }
+  #modal-status { min-height:1.4em; font-size:.9rem; color:var(--muted); margin:6px 0 10px; } #modal-status.err { color:#ff8585; }
   [hidden] { display:none !important; }
+  a { color:#9ec1ff; }
 </style>
 <script type="importmap">
 { "imports": {
@@ -35,23 +81,68 @@
 </head>
 <body>
 <main>
-  <h1>Token Sale</h1>
-  <p id="banner" class="muted">Loading…</p>
+  <header>
+    <img src="/assets/float-logo.jpg" alt="" />
+    <div class="brand">FLOAT</div>
+    <nav class="menu">
+      <a href="https://www.floatlaunch.xyz">Home</a>
+      <a href="/" class="active" aria-current="page">Sale</a>
+    </nav>
+    <a class="x" href="https://x.com/floatdotxyz" target="_blank" rel="noopener">𝕏</a>
+  </header>
 
-  <section id="connect">
-    <h2>1. Choose your wallet</h2>
-    <div id="wallet-list" class="grid"></div>
-    <p class="muted" id="hint"></p>
+  <div class="hero">
+    <img src="/assets/float-logo.jpg" alt="FLOAT" />
+    <h1 id="hero-title">Buy $FLOAT</h1>
+    <p id="hero-sub" class="muted">Loading…</p>
+  </div>
+
+  <!-- Step 1: referral code -->
+  <section id="gate" class="card">
+    <h2>Enter your referral code</h2>
+    <p class="muted">You need a valid code from an affiliate to access the sale.</p>
+    <input id="code" autocapitalize="characters" autocorrect="off" />
+    <button id="unlock" class="pill">Unlock</button>
+    <p id="err"></p>
   </section>
 
-  <section id="buy" hidden>
-    <h2>2. Choose an amount</h2>
+  <!-- Step 2: tasks -->
+  <section id="tasks" class="card" hidden>
+    <h2>Complete these 3 tasks</h2>
+    <p class="muted">Tap each one. It opens in a new tab and marks itself done when you return.</p>
+    <a id="task-x" class="task" href="https://x.com/floatdotxyz" target="_blank" rel="noopener">
+      <div class="num">1</div>
+      <div class="t"><b>Follow @floatdotxyz on X</b><small>Opens X</small></div>
+      <div class="go">↗</div>
+    </a>
+    <a id="task-repost" class="task" href="https://x.com/floatdotxyz/status/2115563091723202969" target="_blank" rel="noopener">
+      <div class="num">2</div>
+      <div class="t"><b>Repost our pinned post</b><small>Opens the post on X</small></div>
+      <div class="go">↗</div>
+    </a>
+    <a id="task-tg" class="task" href="#" target="_blank" rel="noopener">
+      <div class="num">3</div>
+      <div class="t"><b>Join our Telegram</b><small id="tg-note">Opens Telegram</small></div>
+      <div class="go">↗</div>
+    </a>
+  </section>
+
+  <!-- Step 3: connect wallet -->
+  <section id="connect" class="card" hidden>
+    <h2>Connect your wallet</h2>
+    <p id="connect-note" class="muted">Connect a wallet to buy $FLOAT.</p>
+    <button id="connect-btn" class="pill">Connect Wallet</button>
+  </section>
+
+  <!-- Step 4: buy -->
+  <section id="buy" class="card" hidden>
+    <h2>Choose an amount</h2>
     <p class="muted">Connected: <span id="who"></span><button id="disconnect" class="link">Disconnect</button></p>
     <label for="pay">Pay with</label>
     <select id="pay"><option value="">SOL</option></select>
     <label for="sol" id="amount-label">SOL to spend</label>
     <input id="sol" inputmode="decimal" placeholder="0.5" autocomplete="off" />
-    <button id="quote" class="main">Get quote</button>
+    <button id="quote" class="pill">Get quote</button>
 
     <div id="summary" hidden>
       <h3>You will pay and receive exactly</h3>
@@ -62,11 +153,45 @@
         <dt>Network fee</dt><dd>0 SOL (paid by the sale)</dd>
       </dl>
       <p class="muted" id="s-note">Both transfers happen in one transaction. If either fails, nothing moves.</p>
-      <button id="sign" class="main">Approve in wallet</button>
+      <button id="sign" class="pill">Approve in wallet</button>
     </div>
-    <p id="status" role="status"></p>
   </section>
+
+  <!-- Done -->
+  <section id="done" class="card" hidden>
+    <div class="done-badge">
+      <div class="tick">✓</div>
+      <h2 id="done-title">Purchase sent!</h2>
+      <p class="muted" id="done-note"></p>
+    </div>
+  </section>
+
+  <p id="status" role="status"></p>
 </main>
+
+<!-- Wallet picker modal: pick a wallet to connect with -->
+<div id="wallet-modal" class="modal-backdrop" hidden>
+  <div class="modal-panel">
+    <div class="modal-head">
+      <h2 id="modal-title">Connect wallet to buy</h2>
+      <button id="modal-close" class="modal-close" type="button">✕</button>
+    </div>
+    <p id="modal-status"></p>
+    <div id="modal-wallet-list" class="grid"></div>
+
+    <details class="guide">
+      <summary>Can't find your wallet here? <span class="arrow">›</span></summary>
+      <p class="muted" style="margin-top:10px;">No problem — you can still buy $FLOAT. Just import your existing wallet into one of the apps above using its recovery phrase or private key:</p>
+      <ol>
+        <li>Install one of the supported wallet apps above from the App Store or Google Play (Phantom is a good default).</li>
+        <li>Open it and choose <b>"I already have a wallet"</b> (sometimes called "Import wallet" or "Restore wallet").</li>
+        <li>Enter your existing 12 or 24-word recovery phrase (or private key, if that's what your wallet gave you) exactly as it was given to you.</li>
+        <li>Your same address will appear automatically — nothing is moved or re-sent.</li>
+      </ol>
+      <p class="warn">Only ever type your recovery phrase or private key into the real wallet app you just installed yourself. Never share it in a chat, website, or with anyone claiming to help you — including people pretending to be FLOAT support.</p>
+    </details>
+  </div>
+</div>
 
 <script type="module">
 import { Connection, VersionedTransaction } from '@solana/web3.js';
@@ -76,46 +201,96 @@ import { decodePurchase, decodeTokenPurchase, formatUnits, loadLookupTables, pk,
 const $ = (id) => document.getElementById(id);
 const enc = encodeURIComponent;
 const pageUrl = location.origin + location.pathname;
-let config = { enabled: false };
+const b64ToBytes = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+const bytesToB64 = (bytes) => { let s = ''; for (const b of bytes) s += String.fromCharCode(b); return btoa(s); };
+const setStatus = (t, err = false) => { $('status').textContent = t; $('status').classList.toggle('err', err); };
+const setModalStatus = (t, err = false) => { $('modal-status').textContent = t; $('modal-status').classList.toggle('err', err); };
+
+const LS_CODE = 'float_sale_code';
+const LS_TASKS = 'float_sale_tasks'; // comma list of done task ids
+
+let config = { enabled: false }; // from /api/config (the sale's own backend, untouched)
+let gateConfig = { enabled: false }; // from /api/airdrop-config, reused only for the telegram task link
 let adapter = null;
 let pendingTx = null;
 let pendingPayMint = '';
 let heldTokens = [];
 let solEntry = null; // the wallet's SOL, shaped like a token, when USD values are available
 
-const b64ToBytes = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-const bytesToB64 = (bytes) => { let s = ''; for (const b of bytes) s += String.fromCharCode(b); return btoa(s); };
-const setStatus = (t, err = false) => { $('status').textContent = t; $('status').classList.toggle('err', err); };
-
-// Deep links open THIS page inside each wallet's own in-app browser, where the wallet is available.
+// ---- Supported wallets, roughly by popularity on Solana. Jupiter is never last, per house rule. ----
+// logo: the wallet's own icon. mono/color: a fallback badge shown only if that image fails to load.
 const WALLETS = [
-  { label: 'Phantom',  match: /phantom/i,   legacy: () => window.phantom?.solana,
+  { label: 'Phantom', logo: 'https://cdn.brandfetch.io/idf5VaJxyT/w/400/h/400/theme/dark/icon.jpeg', color: '#ab9ff2', mono: 'PH',
+    match: /phantom/i, legacy: () => window.phantom?.solana,
     link: (u) => `https://phantom.com/ul/browse/${enc(u)}?ref=${enc(location.origin)}` },
-  { label: 'Solflare', match: /solflare/i,  legacy: () => window.solflare,
+  { label: 'Solflare', logo: 'https://images.seeklogo.com/logo-png/67/1/solflare-logo-png_seeklogo-678285.png', color: '#fc9a3d', mono: 'SF',
+    match: /solflare/i, legacy: () => window.solflare,
     link: (u) => `https://solflare.com/ul/v1/browse/${enc(u)}?ref=${enc(location.origin)}` },
-  { label: 'Backpack', match: /backpack/i,  legacy: () => window.backpack,
+  { label: 'Backpack', logo: 'https://cdn.brandfetch.io/ida5TzVjd9/w/400/h/400/theme/dark/icon.jpeg', color: '#e8393a', mono: 'BP',
+    match: /backpack/i, legacy: () => window.backpack,
     link: (u) => `https://backpack.app/ul/v1/browse/${enc(u)}?ref=${enc(location.origin)}` },
-  { label: 'MetaMask', match: /metamask/i,  legacy: () => null,
-    link: (u) => `https://link.metamask.io/dapp/${u.replace(/^https?:\/\//, '')}` },
-  { label: 'Trust Wallet', match: /trust/i, legacy: () => window.trustwallet?.solana,
-    link: (u) => `https://link.trustwallet.com/open_url?coin_id=501&url=${enc(u)}` },
-  { label: 'Coinbase Wallet', match: /coinbase/i, legacy: () => window.coinbaseSolana,
-    link: (u) => `https://go.cb-w.com/dapp?cb_url=${enc(u)}` },
-  { label: 'OKX Wallet', match: /okx/i, legacy: () => window.okxwallet?.solana,
+  { label: 'Jupiter', logo: 'https://cdn.brandfetch.io/id83JqmO5V/w/200/h/200/theme/dark/idL8D_UEui.png', color: '#f3ba2f', mono: 'JUP',
+    match: /jupiter/i, legacy: () => null,
+    link: (u) => `jupiter://browse/${enc(u)}` },
+  { label: 'OKX Wallet', logo: 'https://cdn.brandfetch.io/idtn7Q7xkM/w/200/h/200/theme/dark/id-r2j9Fha.png', color: '#1a1a1e', mono: 'OKX',
+    match: /okx/i, legacy: () => window.okxwallet?.solana,
     link: (u) => `https://web3.okx.com/download?deeplink=${enc('okx://wallet/dapp/url?dappUrl=' + enc(u))}` },
-  { label: 'Bitget Wallet', match: /bitget|bitkeep/i, legacy: () => window.bitkeep?.solana || window.bitget?.solana,
+  { label: 'Bitget Wallet', logo: 'https://cdn.brandfetch.io/ide1GqodMV/w/200/h/200/theme/dark/idvXuD5Es5.png', color: '#1da2ff', mono: 'BG',
+    match: /bitget|bitkeep/i, legacy: () => window.bitkeep?.solana || window.bitget?.solana,
     link: (u) => `https://bkcode.vip?action=dapp&url=${u}` },
-  // Nightly documents a link that opens a web page inside its own mobile browser.
-  { label: 'Nightly', match: /nightly/i, legacy: () => window.nightly?.solana,
+  { label: 'Trust Wallet', logo: 'https://cdn.brandfetch.io/idPAdGj5ns/w/200/h/200/theme/dark/idNOxU154M.png', color: '#3375bb', mono: 'TW',
+    match: /trust/i, legacy: () => window.trustwallet?.solana,
+    link: (u) => `https://link.trustwallet.com/open_url?coin_id=501&url=${enc(u)}` },
+  { label: 'Coinbase Wallet', logo: 'https://cdn.brandfetch.io/idwDWo4ONQ/w/400/h/400/theme/dark/icon.png', color: '#0052ff', mono: 'CB',
+    match: /coinbase/i, legacy: () => window.coinbaseSolana,
+    link: (u) => `https://go.cb-w.com/dapp?cb_url=${enc(u)}` },
+  { label: 'Nightly', logo: 'https://cdn.brandfetch.io/id8MO3adV8/w/400/h/400/theme/dark/icon.jpeg', color: '#6c4fe0', mono: 'NT',
+    match: /nightly/i, legacy: () => window.nightly?.solana,
     link: (u) => `https://nightly.app/v1?network=solana&cluster=${config.cluster === 'devnet' ? 'devnet' : 'mainnet'}&url=${enc(u)}` },
-  // TokenPocket and Zerion: both links tested on iPhone (open the page inside the wallet's own browser).
-  { label: 'TokenPocket', match: /token\s?pocket/i, legacy: () => window.tokenpocket?.solana,
-    link: (u) => `tpdapp://open?params=${enc(JSON.stringify({ url: u, chain: 'Solana', source: 'token-sale' }))}` },
-  { label: 'Zerion', match: /zerion/i, legacy: () => window.zerion?.solana,
+  { label: 'TokenPocket', logo: 'https://cdn.brandfetch.io/id_NwQUfB8/w/200/h/200/theme/dark/idNcRLcvsk.png', color: '#2980fe', mono: 'TP',
+    match: /token\s?pocket/i, legacy: () => window.tokenpocket?.solana,
+    link: (u) => `tpdapp://open?params=${enc(JSON.stringify({ url: u, chain: 'Solana', source: 'sale' }))}` },
+  { label: 'Zerion', logo: 'https://cdn.brandfetch.io/id6BQtj_VW/w/400/h/400/theme/dark/icon.png', color: '#2962ef', mono: 'ZN',
+    match: /zerion/i, legacy: () => window.zerion?.solana,
     link: (u) => `zerion://browser?url=${enc(u)}` },
-  // Jupiter Mobile opens the page in its own browser through jupiter://browse/<page> (tested on iPhone).
-  { label: 'Jupiter', match: /jupiter/i,    legacy: () => null, link: (u) => `jupiter://browse/${enc(u)}` },
+  { label: 'MetaMask', logo: 'https://cdn.brandfetch.io/id6yhu9VjO/w/400/h/400/theme/dark/icon.jpeg', color: '#f6851b', mono: 'MM',
+    match: /metamask/i, legacy: () => null,
+    link: (u) => `https://link.metamask.io/dapp/${u.replace(/^https?:\/\//, '')}` },
 ];
+
+// ---- Cross-browser-context state passing -----------------------------------------------------
+// There's no database here (by design), so returning "already done" state across a totally separate
+// browser context (e.g. Safari -> a wallet app's own in-app browser) can only travel one way: through
+// the URL, when WE are the one generating the link that opens that other browser.
+function currentState() {
+  const tasks = doneTasks();
+  const required = ['x', 'repost', ...(gateConfig.telegramUrl ? ['tg'] : [])];
+  const tasksDone = required.length > 0 && required.every((id) => tasks.has(id));
+  const code = localStorage.getItem(LS_CODE) || '';
+  return { code, tasksDone };
+}
+function withState(url, extra = {}) {
+  const s = currentState();
+  const u = new URL(url);
+  if (s.code) u.searchParams.set('code', s.code);
+  if (s.tasksDone) u.searchParams.set('tasks', '1');
+  for (const [k, v] of Object.entries(extra)) if (v) u.searchParams.set(k, v);
+  return u.toString();
+}
+function applyUrlState() {
+  const qp = new URLSearchParams(location.search);
+  let changed = false;
+  const code = qp.get('code');
+  if (code) { localStorage.setItem(LS_CODE, code.toUpperCase()); changed = true; }
+  if (qp.get('tasks') === '1') {
+    const required = ['x', 'repost', ...(gateConfig.telegramUrl ? ['tg'] : [])];
+    const d = doneTasks();
+    required.forEach((id) => d.add(id));
+    localStorage.setItem(LS_TASKS, [...d].join(','));
+    changed = true;
+  }
+  if (changed) history.replaceState(null, '', location.pathname);
+}
 
 function standardAdapter(w) {
   let account;
@@ -134,7 +309,6 @@ function standardAdapter(w) {
     async disconnect() { try { await w.features['standard:disconnect']?.disconnect(); } catch {} },
   };
 }
-
 function legacyAdapter(name, p) {
   return {
     name,
@@ -143,7 +317,6 @@ function legacyAdapter(name, p) {
     async disconnect() { try { await p.disconnect?.(); } catch {} },
   };
 }
-
 function detect(def) {
   const std = getWallets().get().find((w) => def.match.test(w.name) && 'standard:connect' in w.features && 'solana:signTransaction' in w.features);
   if (std) return standardAdapter(std);
@@ -152,54 +325,148 @@ function detect(def) {
   return null;
 }
 
-function renderWallets() {
-  const list = $('wallet-list');
+function walletTile(def, onClick) {
+  const b = document.createElement('button');
+  b.className = 'wallet-tile';
+  const img = document.createElement('img');
+  img.src = def.logo; img.alt = def.label; img.loading = 'lazy';
+  img.onerror = () => {
+    const badge = document.createElement('div');
+    badge.className = 'badge'; badge.style.background = def.color; badge.textContent = def.mono;
+    img.replaceWith(badge);
+  };
+  const span = document.createElement('span');
+  span.textContent = def.label;
+  b.append(img, span);
+  b.onclick = onClick;
+  return b;
+}
+
+// ---- Wallet picker modal ----
+// We only need this when no wallet is already detected in the current browser. When one IS detected —
+// including right after this page reopens inside that wallet's own in-app browser — we skip the picker
+// and go straight to that wallet's own connect prompt (see maybeAutoConnect / connectWallet below).
+function openModal() {
+  setModalStatus('');
+  const list = $('modal-wallet-list');
   list.replaceChildren();
-  let anyDetected = false;
   for (const def of WALLETS) {
-    const found = detect(def);
-    anyDetected ||= Boolean(found);
-    const b = document.createElement('button');
-    b.className = 'wallet';
-    b.textContent = def.label;
-    const small = document.createElement('small');
-    small.textContent = found ? 'Tap to connect' : def.link ? 'Tap to open in app' : 'Copy link, open in app';
-    b.append(small);
-    b.onclick = () => (found ? connect(found) : openInApp(def));
-    list.append(b);
+    list.append(walletTile(def, () => connectWallet(def, setModalStatus)));
   }
-  $('hint').textContent = anyDetected
-    ? ''
-    : 'Tap your wallet. This page will reopen inside the wallet app, then connect there.';
+  $('wallet-modal').hidden = false;
 }
+function closeModal() { $('wallet-modal').hidden = true; }
+$('modal-close').onclick = closeModal;
+$('wallet-modal').addEventListener('click', (e) => { if (e.target === $('wallet-modal')) closeModal(); });
 
-async function openInApp(def) {
-  if (def.link) { location.href = def.link(pageUrl); return; }
-  try { await navigator.clipboard.writeText(pageUrl); } catch {}
-  // The normal status line is hidden until a wallet connects, so show this under the wallet list instead.
-  $('hint').textContent = `Link copied. Now open ${def.label}, open its browser (globe icon) and paste this link.`;
-}
+function findDetected() { return WALLETS.find((def) => detect(def)); }
 
-async function connect(a) {
+// Connecting only tells us which address to buy with. Nothing is paid or signed here — that happens
+// after the person picks an amount and gets a quote, same as the sale always worked.
+async function connectWallet(def, statusFn = setStatus) {
+  const found = detect(def);
+  if (!found) {
+    location.href = def.link(withState(pageUrl));
+    return;
+  }
   try {
-    setStatus('Waiting for wallet approval…');
-    const address = await a.connect();
-    adapter = a;
-    $('who').textContent = `${a.name} · ${address.slice(0, 4)}…${address.slice(-4)}`;
+    statusFn(`Waiting for ${def.label} approval…`);
+    const address = await found.connect();
+    adapter = found;
+    closeModal();
+    $('who').textContent = `${def.label} · ${address.slice(0, 4)}…${address.slice(-4)}`;
     $('who').dataset.address = address;
     $('connect').hidden = true;
     $('buy').hidden = false;
-    setStatus('');
+    setStatus(''); setModalStatus('');
     loadTokens(address);
-  } catch (e) { setStatus(e.message || 'Connection cancelled', true); }
+  } catch (e) { statusFn(e.message || 'Connection cancelled', true); }
 }
 
+let autoAttempted = false;
+function maybeAutoConnect() {
+  if (autoAttempted) return;
+  const found = findDetected();
+  if (found) { autoAttempted = true; connectWallet(found, setStatus); }
+}
+
+$('connect-btn').onclick = () => {
+  const found = findDetected();
+  if (found) { connectWallet(found, setStatus); return; }
+  openModal();
+};
+
+$('disconnect').onclick = async () => {
+  await adapter?.disconnect();
+  adapter = pendingTx = null;
+  $('buy').hidden = true; $('summary').hidden = true; $('connect').hidden = false;
+  autoAttempted = false;
+  setStatus('');
+};
+
+// ---- Step flow ----
+function showStep(step) {
+  $('gate').hidden = step !== 'gate';
+  $('tasks').hidden = step !== 'tasks';
+  $('connect').hidden = step !== 'connect';
+}
+
+async function tryUnlock(code) {
+  $('err').textContent = '';
+  if (!code) { $('err').textContent = 'Enter a code first.'; return; }
+  $('unlock').disabled = true;
+  try {
+    const r = await fetch('/api/airdrop-check', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code }) });
+    const data = await r.json();
+    if (!data.valid) { $('err').textContent = 'That code is not valid. Check it and try again.'; return; }
+    localStorage.setItem(LS_CODE, code.toUpperCase());
+    enterTasks();
+  } catch { $('err').textContent = 'Could not check that code. Check your connection and try again.'; }
+  finally { $('unlock').disabled = false; }
+}
+$('unlock').onclick = () => tryUnlock($('code').value.trim());
+$('code').addEventListener('keydown', (e) => { if (e.key === 'Enter') tryUnlock($('code').value.trim()); });
+
+function doneTasks() { return new Set((localStorage.getItem(LS_TASKS) || '').split(',').filter(Boolean)); }
+function markTaskDone(id) {
+  const d = doneTasks(); d.add(id);
+  localStorage.setItem(LS_TASKS, [...d].join(','));
+  renderTasks();
+}
+function renderTasks() {
+  const d = doneTasks();
+  for (const id of ['x', 'repost', 'tg']) {
+    const el = $('task-' + id);
+    const isTelegram = id === 'tg';
+    const required = !isTelegram || Boolean(gateConfig.telegramUrl);
+    if (isTelegram && !required) {
+      el.classList.add('disabled');
+      el.querySelector('small').textContent = 'Coming soon';
+    } else {
+      el.classList.toggle('done', d.has(id));
+    }
+  }
+  const required = ['x', 'repost', ...(gateConfig.telegramUrl ? ['tg'] : [])];
+  const allDone = required.every((id) => d.has(id));
+  if (allDone) { showStep('connect'); maybeAutoConnect(); }
+}
+for (const id of ['x', 'repost', 'tg']) {
+  $('task-' + id).addEventListener('click', (e) => {
+    if ($('task-' + id).classList.contains('disabled')) { e.preventDefault(); return; }
+    markTaskDone(id);
+  });
+}
+function enterTasks() {
+  showStep('tasks');
+  renderTasks();
+}
+
+// ---- Step: buy (amount, quote, sign, submit) — same calls the sale page has always used ----
 const usd = (v) => (v > 0 && v < 0.01 ? '<$0.01' : v.toLocaleString(undefined, { style: 'currency', currency: 'USD' }));
 const shortBal = (raw, decimals) => {
   const [w, f = ''] = formatUnits(BigInt(raw), decimals).split('.');
   return f ? `${w}.${f.slice(0, 4)}`.replace(/\.$/, '') : w;
 };
-// The wallet's holdings (SOL + tokens), most valuable first. Holdings without a price go last.
 const holdings = () => [...(solEntry ? [solEntry] : []), ...heldTokens];
 const current = () => holdings().find((x) => x.mint === $('pay').value) || null;
 const priced = (t) => Boolean(t && t.usdPrice > 0);
@@ -225,7 +492,7 @@ async function loadTokens(address) {
     if (!list.length) sel.append(new Option('SOL', ''));
     if (solEntry?.usdPrice) {
       const p = solEntry.usdPrice;
-      $('banner').textContent += ` (about ${usd(config.minSol * p)} to ${usd(config.maxSol * p)})`;
+      $('hero-sub').textContent += ` (about ${usd(config.minSol * p)} to ${usd(config.maxSol * p)})`;
     }
     updateLabel();
   } catch { sel.replaceChildren(new Option('SOL', '')); updateLabel(); /* SOL only */ }
@@ -239,13 +506,6 @@ function updateLabel() {
   $('summary').hidden = true; pendingTx = null;
 }
 $('pay').onchange = updateLabel;
-
-$('disconnect').onclick = async () => {
-  await adapter?.disconnect();
-  adapter = pendingTx = null;
-  $('buy').hidden = true; $('summary').hidden = true; $('connect').hidden = false;
-  setStatus('');
-};
 
 $('quote').onclick = async () => {
   $('summary').hidden = true; pendingTx = null;
@@ -261,13 +521,10 @@ $('quote').onclick = async () => {
     const res = await fetch('/api/quote', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Could not get a quote');
-    // Some wallet apps will not let you approve while the wallet holds almost no SOL, so the sale may have just sent
-    // a small top-up. Wait for it to land before showing the summary.
     if (data.drip) await waitForTopUp(data.drip);
     const tx = VersionedTransaction.deserialize(b64ToBytes(data.transaction));
     const ctx = { seller: pk(config.seller), receiver: pk(config.receiver), mint: pk(config.mint) };
 
-    // Don't trust the server's description: decode the transaction itself and show what it really does.
     if (!payMint) {
       const d = decodePurchase(tx, ctx);
       if (d.buyer !== address || d.decimals !== config.decimals) throw new Error('Transaction does not match your wallet');
@@ -276,8 +533,6 @@ $('quote').onclick = async () => {
       $('s-note').textContent = 'Both transfers happen in one transaction. If either fails, nothing moves.';
     } else {
       setStatus('Verifying the transaction…');
-      // Read the lookup tables ourselves (not from our server) so the check stays independent.
-      // The same goes for which token program (classic or Token-2022) owns the payment token.
       let tables = null, payProgram = null;
       for (const url of config.publicRpcs) {
         try {
@@ -337,7 +592,12 @@ async function waitForConfirmation(sig) {
   for (let i = 0; i < 40; i++) {
     setStatus('Confirming…');
     const { status } = await (await fetch(`/api/status?sig=${enc(sig)}`)).json();
-    if (status === 'confirmed' || status === 'finalized') return setStatus(`Done. Your tokens are in your wallet. ${link}`);
+    if (status === 'confirmed' || status === 'finalized') {
+      $('buy').hidden = true;
+      $('done-note').innerHTML = `Done. Your tokens are in your wallet. <a href="${link}" target="_blank" rel="noopener">View transaction</a>`;
+      $('done').hidden = false;
+      return setStatus('');
+    }
     if (status === 'failed') return setStatus(`The transaction failed, nothing was taken. ${link}`, true);
     await new Promise((r) => setTimeout(r, 1500));
   }
@@ -346,13 +606,20 @@ async function waitForConfirmation(sig) {
 
 async function init() {
   try { config = await (await fetch('/api/config')).json(); } catch {}
-  $('banner').textContent = config.enabled
+  try { gateConfig = await (await fetch('/api/airdrop-config')).json(); } catch { gateConfig = { enabled: false }; }
+  $('hero-sub').textContent = config.enabled
     ? `${config.tokensPerSol.toLocaleString()} tokens per 1 SOL · min ${config.minSol} SOL · max ${config.maxSol} SOL`
-    : 'The sale is not open yet. You can still test connecting a wallet.';
-  $('quote').disabled = !config.enabled;
-  renderWallets();
+    : 'The sale is not open yet. Check back soon.';
+  if (!config.enabled) { $('gate').hidden = true; return; }
+  if (gateConfig.telegramUrl) {
+    $('task-tg').href = gateConfig.telegramUrl;
+    $('tg-note').textContent = 'Opens Telegram';
+  }
+  applyUrlState();
   const { on } = getWallets();
-  on('register', renderWallets);
+  on('register', () => { if ($('connect').hidden === false) maybeAutoConnect(); });
+  const savedCode = localStorage.getItem(LS_CODE);
+  if (savedCode) { $('code').value = savedCode; enterTasks(); }
 }
 init();
 </script>
