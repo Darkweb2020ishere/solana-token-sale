@@ -254,7 +254,13 @@ export default async function handler(req, res) {
     // here and send it straight away (the seller pays the fee and funds the transfer). Connecting a
     // wallet is only how we learn which address to send to — receiving a free airdrop needs no
     // signature from the claimant, so there's nothing for their wallet to sign.
-    if (action === 'airdrop-claim') {
+    // Claiming is a two-step, wallet-signed flow, same shape as the sale's own quote -> submit: the
+    // server builds the transaction and signs as the seller (who pays the fee and funds the transfer),
+    // the connecting wallet signs it too, and only then is it broadcast. The sale's own build/decode
+    // helpers always require a real (non-zero) SOL payment from the buyer, so a free claim can't reuse
+    // them as-is — this includes a real SystemProgram transfer from the claimant for exactly 0 lamports,
+    // which is what naturally makes their wallet a required signer, without costing them anything.
+    if (action === 'airdrop-build') {
       if (req.method !== 'POST') return bad(res, 'POST required', 405);
       if (!airdropEnabled) return bad(res, 'The airdrop is not open yet', 503);
       const code = String(req.body.code || '').trim().toUpperCase();
@@ -276,12 +282,29 @@ export default async function handler(req, res) {
         recentBlockhash: blockhash,
         instructions: [
           createAssociatedTokenAccountIdempotentInstruction(seller.publicKey, buyerAta, buyer, mint, program),
+          SystemProgram.transfer({ fromPubkey: buyer, toPubkey: seller.publicKey, lamports: 0 }),
           createTransferCheckedInstruction(sellerAta, mint, buyerAta, seller.publicKey, amountRaw, decimals, [], program),
         ],
       }).compileToV0Message());
-      tx.sign([seller]);
+      tx.sign([seller]); // partial: the buyer's own signature slot is still empty until their wallet signs
+      return res.json({ transaction: Buffer.from(tx.serialize()).toString('base64'), amount: airdropAmount });
+    }
+
+    if (action === 'airdrop-submit') {
+      if (req.method !== 'POST') return bad(res, 'POST required', 405);
+      if (!airdropEnabled) return bad(res, 'The airdrop is not open yet', 503);
+      let tx;
+      try { tx = VersionedTransaction.deserialize(Buffer.from(String(req.body.transaction || ''), 'base64')); }
+      catch { return bad(res, 'That transaction could not be read. Please try again.'); }
+      // The fee payer (seller) and the buyer are the only two required signers we ever build in; whichever
+      // signer key isn't the seller's is the claiming wallet.
+      const signerKeys = tx.message.staticAccountKeys.slice(0, tx.message.header.numRequiredSignatures);
+      const buyerKey = signerKeys.find((k) => !k.equals(seller.publicKey));
+      if (!buyerKey) return bad(res, 'Could not tell which wallet this transaction is for.');
+      const buyer = buyerKey.toBase58();
+      if (airdropClaimed.has(buyer)) return bad(res, 'This wallet already claimed the airdrop');
       const signature = await conn.sendRawTransaction(tx.serialize(), { maxRetries: 3 });
-      airdropClaimed.add(buyer.toBase58());
+      airdropClaimed.add(buyer);
       return res.json({ signature, amount: airdropAmount });
     }
 

